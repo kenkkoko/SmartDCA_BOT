@@ -130,18 +130,18 @@
             const angleFromRight = Math.min(180, Math.max(0, (fngValue / 100) * 180));
             const indicatorAngleDeg = 180 - angleFromRight; 
 
-            // 修正: 重新定義 segments 以確保 FNG 策略界線 (25, 45, 55, 75) 精確對齊
+            // 顏色區塊的精確角度劃分 (0-25, 26-44, 45-55, 56-74, 75-100)
             const segments = [
                 // FNG 0-25 (45度): 紅色 (Extreme Fear)
                 { startAngle: 180, endAngle: 135, color: '#EA3943' }, 
-                // FNG 25-45 (36度): 橘色 (Fear)
-                { startAngle: 135, endAngle: 99, color: '#EA8C00' },  
-                // FNG 45-55 (18度): 黃色 (Neutral)
-                { startAngle: 99, endAngle: 81, color: '#F3D42F' },   
-                // FNG 55-75 (36度): 亮綠色 (Greed)
-                { startAngle: 81, endAngle: 45, color: '#93D900' },   
-                // FNG 75-100 (45度): 青綠色 (Extreme Greed)
-                { startAngle: 45, endAngle: 0, color: '#16C784' },    
+                // FNG 26-44 (34.2度): 橘色 (Fear)
+                { startAngle: 135, endAngle: 100.8, color: '#EA8C00' },  
+                // FNG 45-55 (19.8度): 黃色 (Neutral)
+                { startAngle: 100.8, endAngle: 81, color: '#F3D42F' },   
+                // FNG 56-74 (34.2度): 亮綠色 (Greed)
+                { startAngle: 81, endAngle: 46.8, color: '#93D900' },   
+                // FNG 75-100 (46.8度): 青綠色 (Extreme Greed)
+                { startAngle: 46.8, endAngle: 0, color: '#16C784' },    
             ];
 
             // 根據參考網站的 SVG 參數進行調整
@@ -184,7 +184,6 @@
             const indicatorPosition = getCoords(indicatorAngleDeg); 
 
             // 計算 viewBox 高度，確保能容納圓弧和指標以及中央文字。
-            // 修正：減少底部留白
             const viewBoxHeight = centerY + 10; 
 
             return (
@@ -255,6 +254,8 @@
                             {classification}
                         </text>
                     </svg>
+                    
+                    {/* 儀表板刻度文字 (0, 25, 50, 75, 100) - 已移除 */}
                 </div>
             );
         };
@@ -580,6 +581,7 @@
                 if (!currentFNG) return { text: "載入中...", color: "text-gray-400" };
                 const val = parseInt(currentFNG.value);
                 
+                // 策略建議區間以匹配儀表板區間 (0-25, 26-44, 45-55, 56-74, 75-100)
                 if (val <= 25) return { 
                     title: "極度恐懼 (Extreme Fear)", 
                     action: "強力買入", 
@@ -588,7 +590,7 @@
                     border: "border-red-500",
                     text: "text-red-400" 
                 };
-                if (val <= 45) return { 
+                if (val >= 26 && val <= 44) return { 
                     title: "恐懼 (Fear)", 
                     action: "分批買入", 
                     desc: "市場情緒低迷，適合執行標準 DCA 策略。",
@@ -596,7 +598,7 @@
                     border: "border-orange-500",
                     text: "text-orange-400"
                 };
-                if (val <= 55) return { 
+                if (val >= 45 && val <= 55) return { 
                     title: "中立 (Neutral)", 
                     action: "持有觀望", 
                     desc: "市場方向不明，建議暫停大額買入，保持觀望。",
@@ -604,13 +606,21 @@
                     border: "border-gray-600",
                     text: "text-gray-400"
                 };
-                return { 
-                    title: `貪婪 (${currentFNG.value_classification})`, 
+                if (val >= 56 && val <= 74) return { 
+                    title: "貪婪 (Greed)", 
                     action: "停止買入 / 考慮止盈", 
                     desc: "市場情緒過熱，風險增加，不建議此時進行 DCA。",
                     bg: "bg-green-900/30",
                     border: "border-green-500",
                     text: "text-green-400"
+                };
+                return { 
+                    title: `極度貪婪 (Extreme Greed)`, 
+                    action: "極高風險 / 止盈", 
+                    desc: "市場極度過熱，強烈建議止盈或停止所有買入操作。",
+                    bg: "bg-blue-900/30",
+                    border: "border-blue-500",
+                    text: "text-blue-400"
                 };
             };
 
@@ -807,7 +817,7 @@
                                             </li>
                                             <li className="flex gap-2">
                                                 <span className="text-blue-500">•</span>
-                                                <span>當指數 26-45 (恐懼)：跳出標準 DCA 通知。</span>
+                                                <span>當指數 26-44 (恐懼)：跳出標準 DCA 通知。 (已根據最新圖表調整)</span>
                                             </li>
                                             <li className="flex gap-2">
                                                 <span className="text-blue-500">•</span>
