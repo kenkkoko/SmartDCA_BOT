@@ -1,65 +1,81 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
+
 <head>
+       
     <meta charset="UTF-8">
+       
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart DCA Bot - 恐懼貪婪指數策略</title>
+        <title>Smart DCA Bot - 恐懼貪婪指數策略</title>
+       
     <link rel="icon" type="image/png" href="./app-icon.png" />
 
-    
-    <!-- 引入 Tailwind CSS -->
+
+        <!-- 引入 Tailwind CSS -->
+       
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- 引入 React 和 ReactDOM -->
+
+        <!-- 引入 React 和 ReactDOM -->
+       
     <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+       
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
-    
-    <!-- 引入 Babel 用於解析 JSX -->
+
+        <!-- 引入 Babel 用於解析 JSX -->
+       
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    <!-- 引入 Chart.js (確保使用 UMD 版本) -->
+        <!-- 引入 Chart.js (確保使用 UMD 版本) -->
+       
     <script src="https://cdn.jsdelivr.net/npm/chart.js/dist/chart.umd.min.js"></script>
-    
-    <style>
+
+        <style>
         body {
-            background-color: #0f172a; /* slate-950 */
+            background-color: #0f172a;
+            /* slate-950 */
         }
+
         /* 自定義捲軸 */
         ::-webkit-scrollbar {
             width: 8px;
         }
+
         ::-webkit-scrollbar-track {
-            background: #1e293b; 
+            background: #1e293b;
         }
+
         ::-webkit-scrollbar-thumb {
-            background: #475569; 
+            background: #475569;
             border-radius: 4px;
         }
+
         ::-webkit-scrollbar-thumb:hover {
-            background: #64748b; 
+            background: #64748b;
         }
 
         /* 移除舊的指針 CSS，使用 SVG 內建動畫 */
     </style>
 </head>
-<body>
-    <div id="root"></div>
 
+<body>
+        <div id="root"></div>
+
+       
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
-        
+
         // --- 內建 Icons (取代外部 lucide-react 依賴) ---
         const IconBase = ({ children, size = 24, className = "" }) => (
-            <svg 
-                xmlns="http://www.w3.org/2000/svg" 
-                width={size} 
-                height={size} 
-                viewBox="0 0 24 24" 
-                fill="none" 
-                stroke="currentColor" 
-                strokeWidth="2" 
-                strokeLinecap="round" 
-                strokeLinejoin="round" 
+            <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width={size}
+                height={size}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
                 className={className}
             >
                 {children}
@@ -118,36 +134,78 @@
                     <line x1="12" y1="5" x2="12" y2="19" />
                     <polyline points="19 12 12 19 5 12" />
                 </IconBase>
+            ),
+            Newspaper: (props) => (
+                <IconBase {...props}>
+                    <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2" />
+                    <path d="M18 14h-8" />
+                    <path d="M15 18h-5" />
+                    <path d="M10 6h8v4h-8V6Z" />
+                </IconBase>
+            ),
+            Sparkles: (props) => (
+                <IconBase {...props}>
+                    <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
+                </IconBase>
+            ),
+            ExternalLink: (props) => (
+                <IconBase {...props}>
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                    <polyline points="15 3 21 3 21 9" />
+                    <line x1="10" y1="14" x2="21" y2="3" />
+                </IconBase>
+            ),
+            Bot: (props) => (
+                <IconBase {...props}>
+                    <path d="M12 8V4H8" />
+                    <rect width="16" height="12" x="4" y="8" rx="2" />
+                    <path d="M2 14h2" />
+                    <path d="M20 14h2" />
+                    <path d="M15 13v2" />
+                    <path d="M9 13v2" />
+                </IconBase>
+            ),
+            Globe: (props) => (
+                <IconBase {...props}>
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="2" y1="12" x2="22" y2="12" />
+                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                </IconBase>
+            ),
+            Activity: (props) => (
+                <IconBase {...props}>
+                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                </IconBase>
             )
         };
 
-        const { Bell, TrendingUp, AlertTriangle, Info, RefreshCw, Smartphone, ArrowUp, ArrowDown } = Icons;
+        const { Bell, TrendingUp, AlertTriangle, Info, RefreshCw, Smartphone, ArrowUp, ArrowDown, Newspaper, Sparkles, ExternalLink, Bot, Globe, Activity } = Icons;
 
         // --- 恐懼貪婪指數儀表板元件 ---
         const FearGreedGauge = ({ fngValue, classification }) => {
             // FNG 範圍對應到 180 度的半圓
             // 0 -> 180deg (左側), 100 -> 0deg (右側)
             const angleFromRight = Math.min(180, Math.max(0, (fngValue / 100) * 180));
-            const indicatorAngleDeg = 180 - angleFromRight; 
+            const indicatorAngleDeg = 180 - angleFromRight;
 
             // 顏色區塊的精確角度劃分 (0-25, 26-44, 45-55, 56-74, 75-100)
             const segments = [
                 // FNG 0-25 (45度): 紅色 (Extreme Fear)
-                { startAngle: 180, endAngle: 135, color: '#EA3943' }, 
+                { startAngle: 180, endAngle: 135, color: '#EA3943' },
                 // FNG 26-44 (34.2度): 橘色 (Fear)
-                { startAngle: 135, endAngle: 100.8, color: '#EA8C00' },  
+                { startAngle: 135, endAngle: 100.8, color: '#EA8C00' },
                 // FNG 45-55 (19.8度): 黃色 (Neutral)
-                { startAngle: 100.8, endAngle: 81, color: '#F3D42F' },   
+                { startAngle: 100.8, endAngle: 81, color: '#F3D42F' },
                 // FNG 56-74 (34.2度): 亮綠色 (Greed)
-                { startAngle: 81, endAngle: 46.8, color: '#93D900' },   
+                { startAngle: 81, endAngle: 46.8, color: '#93D900' },
                 // FNG 75-100 (46.8度): 青綠色 (Extreme Greed)
-                { startAngle: 46.8, endAngle: 0, color: '#16C784' },    
+                { startAngle: 46.8, endAngle: 0, color: '#16C784' },
             ];
 
             // 根據參考網站的 SVG 參數進行調整
             const size = 144; // 參考網站的 SVG 寬度
             const radius = 59; // 參考網站的半徑
-            const strokeWidth = 10; 
+            const strokeWidth = 10;
             const indicatorRadius = 7; // 指標半徑 (外圈)
             const indicatorInnerRadius = 5; // 指標半徑 (內圈)
 
@@ -158,11 +216,11 @@
 
             // 1. 座標轉換工具
             const getCoords = (angleDeg) => {
-                const angleRad = (angleDeg) * (Math.PI / 180); 
+                const angleRad = (angleDeg) * (Math.PI / 180);
                 return {
                     x: centerX + radius * Math.cos(angleRad),
                     // 確保向上開啟
-                    y: centerY - radius * Math.sin(angleRad) 
+                    y: centerY - radius * Math.sin(angleRad)
                 };
             };
 
@@ -170,30 +228,30 @@
             const getArcPath = (startAngle, endAngle) => {
                 const start = getCoords(startAngle);
                 const end = getCoords(endAngle);
-                const largeArcFlag = 0; 
+                const largeArcFlag = 0;
                 // sweepFlag = 1，確保圓弧是向外凸出
-                const sweepFlag = 1; 
+                const sweepFlag = 1;
 
                 return [
-                    "M", start.x, start.y, 
+                    "M", start.x, start.y,
                     "A", radius, radius, 0, largeArcFlag, sweepFlag, end.x, end.y
                 ].join(" ");
             };
 
             // 指標位置
-            const indicatorPosition = getCoords(indicatorAngleDeg); 
+            const indicatorPosition = getCoords(indicatorAngleDeg);
 
             // 計算 viewBox 高度，確保能容納圓弧和指標以及中央文字。
-            const viewBoxHeight = centerY + 10; 
+            const viewBoxHeight = centerY + 10;
 
             return (
                 // 容器設為響應式寬度，最大不超過 200px (以適應小尺寸的儀表板)。
                 <div className="relative w-full max-w-[200px] mx-auto flex flex-col items-center">
-                    <svg 
+                    <svg
                         className="w-full h-auto" // 讓 SVG 佔滿容器寬度並保持長寬比
-                        viewBox={`0 0 ${size} ${viewBoxHeight}`} 
+                        viewBox={`0 0 ${size} ${viewBoxHeight}`}
                     >
-                        
+
                         {/* 繪製分段圓弧 */}
                         <g>
                             {segments.map((segment, index) => (
@@ -204,7 +262,7 @@
                                     stroke={segment.color}
                                     strokeWidth={strokeWidth}
                                     // 修正：移除 strokeLinecap="round" 以避免色塊重疊/入侵
-                                    strokeLinecap="butt" 
+                                    strokeLinecap="butt"
                                     className="drop-shadow-sm transition-all duration-500"
                                 />
                             ))}
@@ -232,30 +290,125 @@
                         {/* 中央數值和分類文字 (置於 SVG 圓弧中間) */}
                         <text
                             x={centerX}
-                            // Y 軸調整：數值位置 
-                            y={centerY - 28} 
+                            // Y 軸調整：數值位置 
+                            y={centerY - 28}
                             textAnchor="middle"
                             dominantBaseline="middle"
                             className="fill-white font-black"
                             // 修正：縮小字體到 28px
-                            style={{ fontSize: '28px', lineHeight: 1 }} 
+                            style={{ fontSize: '28px', lineHeight: 1 }}
                         >
                             {fngValue}
                         </text>
                         <text
                             x={centerX}
                             // Y 軸調整：分類位置
-                            y={centerY + 3} 
+                            y={centerY + 3}
                             textAnchor="middle"
                             dominantBaseline="middle"
                             className="fill-slate-400 font-medium"
-                            style={{ fontSize: '16px' }} 
+                            style={{ fontSize: '16px' }}
                         >
                             {classification}
                         </text>
                     </svg>
-                    
+
                     {/* 儀表板刻度文字 (0, 25, 50, 75, 100) - 已移除 */}
+                </div>
+            );
+        };
+
+        // --- 新聞摘要元件 ---
+        const NewsSummary = ({ news }) => {
+            const topNews = news.slice(0, 3);
+
+            return (
+                <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-6 rounded-2xl border border-slate-700 shadow-xl mb-6 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none"></div>
+
+                    <div className="flex justify-between items-start mb-4 relative z-10">
+                        <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                            <Sparkles className="text-yellow-400" size={20} />
+                            今日市場快訊
+                        </h3>
+                    </div>
+
+                    <div className="relative z-10">
+                        <div className="space-y-3">
+                            {topNews.map((item, index) => (
+                                <div key={index} className="flex gap-3 items-start">
+                                    <span className="text-blue-500 font-bold text-sm mt-0.5">{index + 1}.</span>
+                                    <a href={item.link} target="_blank" rel="noopener noreferrer" className="text-slate-300 text-sm hover:text-blue-400 transition-colors line-clamp-2">
+                                        {item.title}
+                                    </a>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- 新聞列表元件 ---
+        const NewsSection = ({ news, loading, error }) => {
+            if (loading) {
+                return (
+                    <div className="flex justify-center items-center py-12">
+                        <RefreshCw className="animate-spin text-slate-500" size={24} />
+                    </div>
+                );
+            }
+
+            if (error) {
+                return (
+                    <div className="text-center py-8 text-red-400 text-sm">
+                        無法載入新聞: {error}
+                    </div>
+                );
+            }
+
+            // 只顯示前 6 則 (模擬每日觀看量最多/最重要)
+            const displayNews = news.slice(0, 6);
+
+            return (
+                <div className="grid grid-cols-1 gap-3">
+                    {displayNews.map((item, index) => (
+                        <a
+                            key={index}
+                            href={item.link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="group bg-slate-900 border border-slate-800 rounded-xl overflow-hidden hover:border-slate-600 transition-all duration-300 flex flex-row h-24 sm:h-28"
+                        >
+                            {/* 內容區塊 - 左側 */}
+                            <div className="p-3 sm:p-4 flex flex-col justify-between flex-1 min-w-0">
+                                <h4 className="font-bold text-slate-200 text-sm sm:text-base line-clamp-2 group-hover:text-blue-400 transition-colors leading-snug">
+                                    {item.title}
+                                </h4>
+                                <div className="flex items-center justify-between text-xs text-slate-500 mt-1">
+                                    <span>{new Date(item.pubDate).toLocaleDateString()}</span>
+                                    <span className="flex items-center gap-1 group-hover:text-blue-400">
+                                        閱讀全文 <ExternalLink size={12} />
+                                    </span>
+                                </div>
+                            </div>
+
+                            {/* 圖片區塊 - 右側 (如果載入失敗或無圖片則不顯示) */}
+                            {item.thumbnail && (
+                                <div className="w-24 sm:w-32 h-full shrink-0 bg-slate-800 relative">
+                                    <img
+                                        src={item.thumbnail}
+                                        alt={item.title}
+                                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                        onError={(e) => {
+                                            // 如果圖片載入失敗，隱藏整個圖片容器
+                                            e.currentTarget.parentElement.style.display = 'none';
+                                        }}
+                                    />
+                                </div>
+                            )}
+                        </a>
+                    ))}
                 </div>
             );
         };
@@ -287,74 +440,443 @@
             return <canvas ref={chartRef} />;
         };
 
-        const App = () => {
+        // --- 美股儀表板元件 ---
+        const StockDashboard = ({ notificationsEnabled, toggleNotifications }) => {
+            const [fngData, setFngData] = useState(null);
+            const [fngHistory, setFngHistory] = useState([]); // Store historical data
+            const [stockNews, setStockNews] = useState([]);
+            const [indices, setIndices] = useState({ spy: null, qqq: null, gold: null }); // Store SPY, QQQ, Gold data
+            const [loading, setLoading] = useState(true);
+            const [error, setError] = useState(null);
+
+            const fetchStockData = async () => {
+                setLoading(true);
+                try {
+                    // 1. 獲取真實 CNN Fear & Greed Index (透過 CORS Proxy)
+                    const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent('https://production.dataviz.cnn.io/index/fearandgreed/graphdata');
+
+                    const fngResponse = await fetch(proxyUrl);
+                    if (!fngResponse.ok) throw new Error('無法獲取 CNN 數據');
+
+                    const fngJson = await fngResponse.json();
+
+                    let score = 50;
+                    let rating = "Neutral";
+                    let lastUpdated = new Date().toISOString();
+                    let history = [];
+
+                    if (fngJson.fear_and_greed) {
+                        score = fngJson.fear_and_greed.score;
+                        rating = fngJson.fear_and_greed.rating;
+                        lastUpdated = fngJson.fear_and_greed.timestamp;
+
+                        // 翻譯評級
+                        const ratingMap = {
+                            "Extreme Fear": "極度恐懼",
+                            "extreme fear": "極度恐懼",
+                            "Fear": "恐懼",
+                            "fear": "恐懼",
+                            "Neutral": "中立",
+                            "neutral": "中立",
+                            "Greed": "貪婪",
+                            "greed": "貪婪",
+                            "Extreme Greed": "極度貪婪",
+                            "extreme greed": "極度貪婪"
+                        };
+                        rating = ratingMap[rating] || rating;
+                    }
+
+                    // 解析歷史數據 (fear_and_greed_historical)
+                    if (fngJson.fear_and_greed_historical && fngJson.fear_and_greed_historical.data) {
+                        history = fngJson.fear_and_greed_historical.data.map(item => ({
+                            x: item.x, // Timestamp
+                            y: Math.round(item.y) // Score
+                        }));
+                    }
+
+                    setFngData({
+                        value: Math.round(score),
+                        classification: rating,
+                        lastUpdated: lastUpdated
+                    });
+                    setFngHistory(history);
+
+                    // 2. 獲取美股大盤價格 (Yahoo Finance via Proxy)
+                    const fetchYahooPrice = async (symbol) => {
+                        const yfUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`;
+                        const res = await fetch('https://corsproxy.io/?' + encodeURIComponent(yfUrl));
+                        const data = await res.json();
+                        const meta = data.chart.result[0].meta;
+
+                        const price = meta.regularMarketPrice;
+                        // 嘗試多種欄位獲取昨收，避免 NaN
+                        const prevClose = meta.chartPreviousClose || meta.previousClose || meta.regularMarketPreviousClose || price;
+
+                        return {
+                            price: price,
+                            prevClose: prevClose,
+                            change: price - prevClose,
+                            changePercent: ((price - prevClose) / prevClose) * 100
+                        };
+                    };
+
+                    const [spyData, qqqData, goldData] = await Promise.all([
+                        fetchYahooPrice('SPY'), // S&P 500 ETF
+                        fetchYahooPrice('QQQ'), // NASDAQ 100 ETF
+                        fetchYahooPrice('GLD')  // Gold ETF
+                    ]);
+
+                    setIndices({ spy: spyData, qqq: qqqData, gold: goldData });
+
+                    // 3. 獲取美股新聞 (CNBC Finance RSS - English)
+                    const rssUrl = 'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664';
+                    const newsResponse = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`);
+                    const newsData = await newsResponse.json();
+
+                    if (newsData.status === 'ok') {
+                        setStockNews(newsData.items);
+                    }
+
+                } catch (e) {
+                    console.error("Stock data error:", e);
+                    setError("無法獲取美股數據 (請檢查網路或 Proxy 狀態)");
+                    setFngData({ value: 50, classification: "Unknown" });
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            useEffect(() => {
+                fetchStockData();
+            }, []);
+
+            const getSuggestion = (score) => {
+                const val = parseInt(score);
+                if (val <= 25) return {
+                    title: "極度恐懼 (Extreme Fear)",
+                    action: "強力買入",
+                    desc: "市場極度恐慌，股價可能被低估，是長期投資的買入良機。",
+                    bg: "bg-red-900/30",
+                    border: "border-red-500",
+                    text: "text-red-400"
+                };
+                if (val <= 45) return {
+                    title: "恐懼 (Fear)",
+                    action: "分批買入",
+                    desc: "市場情緒低迷，投資者趨於保守，適合執行 DCA 策略。",
+                    bg: "bg-orange-900/30",
+                    border: "border-orange-500",
+                    text: "text-orange-400"
+                };
+                if (val <= 55) return {
+                    title: "中立 (Neutral)",
+                    action: "持有/觀望",
+                    desc: "市場缺乏明確方向，建議保持現有部位，觀察後續變化。",
+                    bg: "bg-gray-800",
+                    border: "border-gray-600",
+                    text: "text-gray-400"
+                };
+                if (val <= 75) return {
+                    title: "貪婪 (Greed)",
+                    action: "停止買入",
+                    desc: "市場情緒樂觀，股價可能偏高，不建議此時追高。",
+                    bg: "bg-green-900/30",
+                    border: "border-green-500",
+                    text: "text-green-400"
+                };
+                return {
+                    title: "極度貪婪 (Extreme Greed)",
+                    action: "考慮止盈",
+                    desc: "市場極度樂觀，泡沫風險增加，建議考慮獲利了結。",
+                    bg: "bg-blue-900/30",
+                    border: "border-blue-500",
+                    text: "text-blue-400"
+                };
+            };
+
+            const suggestion = fngData ? getSuggestion(fngData.value) : null;
+
+            // Index Price Card Component
+            const IndexPriceCard = ({ name, symbol, data, suggestion }) => {
+                if (!data) return <div className="animate-pulse bg-slate-800 h-32 rounded-xl"></div>;
+
+                const isPositive = data.change >= 0;
+
+                // Determine DCA Signal Badge
+                let badge = null;
+                if (suggestion && suggestion.action.includes("買入")) {
+                    badge = <span className="ml-2 px-2 py-0.5 text-xs font-bold bg-green-500/20 text-green-400 rounded">Buy</span>;
+                } else if (suggestion && suggestion.action.includes("止盈")) {
+                    badge = <span className="ml-2 px-2 py-0.5 text-xs font-bold bg-red-500/20 text-red-400 rounded">Sell</span>;
+                }
+
+                return (
+                    <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
+                        <div className="flex justify-between items-start mb-2">
+                            <div>
+                                <h3 className="text-slate-400 text-sm font-medium flex items-center">
+                                    {name}
+                                    {badge}
+                                </h3>
+                                <div className="text-2xl font-bold text-slate-100 mt-1">
+                                    {data.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </div>
+                            </div>
+                            <div className={`text-right ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
+                                <div className="text-sm font-bold flex items-center justify-end">
+                                    {isPositive ? <ArrowUp size={16} /> : <ArrowDown size={16} />}
+                                    {Math.abs(data.change).toFixed(2)}
+                                </div>
+                                <div className="text-xs font-medium">
+                                    {isPositive ? '+' : ''}{data.changePercent.toFixed(2)}%
+                                </div>
+                            </div>
+                        </div>
+                        <div className="text-xs text-slate-500">
+                            {symbol} • Real-time
+                        </div>
+                    </div>
+                );
+            };
+
+            // Fear & Greed Historical Chart
+            const FearGreedChart = ({ history }) => {
+                if (!history || history.length === 0) return null;
+
+                const chartData = {
+                    labels: history.map(d => new Date(d.x).toLocaleDateString()),
+                    datasets: [{
+                        label: 'Fear & Greed Index',
+                        data: history.map(d => d.y),
+                        borderColor: '#3b82f6',
+                        backgroundColor: (context) => {
+                            const ctx = context.chart.ctx;
+                            const gradient = ctx.createLinearGradient(0, 0, 0, 200);
+                            gradient.addColorStop(0, 'rgba(59, 130, 246, 0.5)');
+                            gradient.addColorStop(1, 'rgba(59, 130, 246, 0.0)');
+                            return gradient;
+                        },
+                        borderWidth: 2,
+                        pointBackgroundColor: history.map(d => {
+                            if (d.y <= 25) return '#ef4444'; // Extreme Fear (Red)
+                            if (d.y <= 45) return '#f97316'; // Fear (Orange)
+                            return 'rgba(0,0,0,0)';
+                        }),
+                        pointBorderColor: history.map(d => {
+                            if (d.y <= 25) return '#ef4444';
+                            if (d.y <= 45) return '#f97316';
+                            return 'rgba(0,0,0,0)';
+                        }),
+                        pointRadius: history.map(d => {
+                            if (d.y <= 45) return 3; // Show dots for buy zones
+                            return 0;
+                        }),
+                        pointHoverRadius: 4,
+                        fill: true,
+                        tension: 0.4
+                    }]
+                };
+
+                const options = {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            enabled: true,
+                            backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                            titleColor: '#e2e8f0',
+                            bodyColor: '#e2e8f0',
+                            borderColor: '#334155',
+                            borderWidth: 1,
+                            callbacks: {
+                                label: (context) => `指數: ${context.parsed.y}`
+                            }
+                        },
+                        title: {
+                            display: true,
+                            text: '過去 1 年走勢 (Past 1 Year)',
+                            color: '#94a3b8',
+                            font: { size: 12, weight: 'normal' },
+                            padding: { bottom: 10 }
+                        },
+                        annotation: {
+                            annotations: {
+                                buyZone: {
+                                    type: 'box',
+                                    yMin: 0,
+                                    yMax: 25,
+                                    backgroundColor: 'rgba(74, 222, 128, 0.1)',
+                                    borderWidth: 0,
+                                    label: {
+                                        content: '強力買入區 (0-25)',
+                                        display: true,
+                                        position: 'start',
+                                        color: 'rgba(74, 222, 128, 0.5)',
+                                        font: { size: 10 }
+                                    }
+                                },
+                                dcaZone: {
+                                    type: 'box',
+                                    yMin: 25,
+                                    yMax: 45,
+                                    backgroundColor: 'rgba(250, 204, 21, 0.1)',
+                                    borderWidth: 0,
+                                    label: {
+                                        content: 'DCA 買入區 (25-45)',
+                                        display: true,
+                                        position: 'start',
+                                        color: 'rgba(250, 204, 21, 0.5)',
+                                        font: { size: 10 }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            min: 0,
+                            max: 100,
+                            grid: { color: '#334155' },
+                            ticks: {
+                                stepSize: 25,
+                                color: '#94a3b8',
+                                font: { size: 10 }
+                            }
+                        },
+                        x: {
+                            display: true,
+                            grid: { display: false },
+                            ticks: {
+                                color: '#94a3b8',
+                                maxTicksLimit: 6,
+                                maxRotation: 0,
+                                font: { size: 10 }
+                            }
+                        }
+                    }
+                };
+
+                return (
+                    <div className="h-64 w-full mt-4">
+                        <ChartComponent data={chartData} options={options} />
+                    </div>
+                );
+            };
+
+            return (
+                <div className="space-y-6">
+                    {/* 大盤指數卡片 */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <IndexPriceCard
+                            name="S&P 500 ETF"
+                            symbol="SPY"
+                            data={indices.spy}
+                            suggestion={suggestion}
+                        />
+                        <IndexPriceCard
+                            name="NASDAQ 100 ETF"
+                            symbol="QQQ"
+                            data={indices.qqq}
+                            suggestion={suggestion}
+                        />
+                        <IndexPriceCard
+                            name="Gold ETF"
+                            symbol="GLD"
+                            data={indices.gold}
+                            suggestion={suggestion}
+                        />
+                    </div>
+
+                    {/* 標題區 */}
+                    <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl flex flex-col items-center text-center">
+                        <h2 className="text-xl font-bold text-slate-200 mb-2">美股恐懼與貪婪指數 (CNN)</h2>
+
+                        {loading ? (
+                            <RefreshCw className="animate-spin text-slate-500" size={32} />
+                        ) : error ? (
+                            <div className="flex flex-col items-center gap-2">
+                                <AlertTriangle className="text-red-400" size={32} />
+                                <div className="text-red-400">{error}</div>
+                                <button onClick={fetchStockData} className="mt-2 px-4 py-1 bg-slate-800 rounded text-sm hover:bg-slate-700">重試</button>
+                            </div>
+                        ) : (
+                            <div className="w-full flex flex-col items-center">
+                                <FearGreedGauge
+                                    fngValue={fngData.value}
+                                    classification={fngData.classification}
+                                />
+                                <FearGreedChart history={fngHistory} />
+                            </div>
+                        )}
+                    </div>
+
+                    {/* 策略建議區 */}
+                    {suggestion && (
+                        <div className={`p-6 rounded-2xl border ${suggestion.border} ${suggestion.bg} relative overflow-hidden transition-all duration-500`}>
+                            <div className="relative z-10 flex flex-col md:flex-row justify-between items-center w-full max-w-lg mx-auto mt-0">
+                                <div className="flex flex-col items-start text-left mb-4 md:mb-0">
+                                    <div className="text-sm uppercase tracking-wider opacity-70 mb-1">美股 DCA 策略</div>
+                                    <span className={`text-2xl font-bold ${suggestion.text}`}>
+                                        {suggestion.title}
+                                    </span>
+                                    <p className="mt-2 text-slate-300 max-w-lg text-sm">
+                                        {suggestion.desc}
+                                    </p>
+                                </div>
+                                <div className="flex flex-col items-center md:items-end gap-2 min-w-[140px] text-center md:text-right">
+                                    <div className="text-sm text-slate-400">當前操作</div>
+                                    <div className={`text-xl font-bold ${suggestion.text} border-2 border-current px-4 py-1 rounded-lg whitespace-nowrap`}>
+                                        {suggestion.action}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 美股新聞區 */}
+                    <div className="mt-8">
+                        <div className="flex items-center gap-2 mb-6">
+                            <Newspaper className="text-blue-500" />
+                            <h2 className="text-xl font-bold text-slate-200">美股財經頭條 (CNBC)</h2>
+                        </div>
+
+                        {/* 今日市場快訊 (Highlights) */}
+                        {!loading && !error && stockNews.length > 0 && (
+                            <NewsSummary news={stockNews} />
+                        )}
+
+                        <NewsSection news={stockNews} loading={loading} error={error} />
+                    </div>
+
+                    {/* 資料來源 (移至底部) */}
+                    <div className="text-center text-slate-600 text-xs mt-8 pb-4">
+                        資料來源: CNN Business (Real-time), Yahoo Finance
+                    </div>
+                </div>
+            );
+        };
+
+
+
+        // --- 加密貨幣儀表板 (原 App 內容) ---
+        const CryptoDashboard = ({ notificationsEnabled, toggleNotifications }) => {
             const [selectedCoin, setSelectedCoin] = useState('bitcoin');
             const [loading, setLoading] = useState(true);
             const [error, setError] = useState(null);
             const [historicalData, setHistoricalData] = useState([]);
             const [currentFNG, setCurrentFNG] = useState(null);
-            const [lastUpdated, setLastUpdated] = useState(null);
+            const [lastUpdated, setLastUpdated] = useState(null); // Moved from App
             const [prices, setPrices] = useState(null);
-            
-            // 通知開關狀態 (布林值，控制 UI 開關)
-            const [notificationsEnabled, setNotificationsEnabled] = useState(false);
 
-            // 初始檢查通知權限
-            useEffect(() => {
-                if ("Notification" in window && Notification.permission === 'granted') {
-                    setNotificationsEnabled(true);
-                }
-            }, []);
-
-            // 處理通知開關切換
-            const toggleNotifications = async () => {
-                if (!("Notification" in window)) {
-                    // 使用 custom modal UI 替換 alert
-                    const modal = document.createElement('div');
-                    modal.innerHTML = `
-                        <div class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
-                            <div class="bg-slate-800 p-6 rounded-lg shadow-xl max-w-sm w-full border border-slate-700">
-                                <h3 class="text-xl font-bold text-white mb-3">通知功能不支援</h3>
-                                <p class="text-slate-300">此瀏覽器不支援 Web Notification API。請嘗試使用 Chrome, Firefox 或 Edge 瀏覽器。</p>
-                                <button onclick="this.parentNode.parentNode.remove()" class="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-white text-sm float-right">確定</button>
-                            </div>
-                        </div>
-                    `;
-                    document.body.appendChild(modal);
-                    return;
-                }
-
-                // 如果目前是開啟狀態 -> 關閉 (Local Mute)
-                if (notificationsEnabled) {
-                    setNotificationsEnabled(false);
-                    return;
-                }
-
-                // 如果目前是關閉狀態 -> 開啟
-                if (Notification.permission === 'granted') {
-                    setNotificationsEnabled(true);
-                    sendTestNotification();
-                } else if (Notification.permission === 'denied') {
-                    const modal = document.createElement('div');
-                    modal.innerHTML = `
-                        <div class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
-                            <div class="bg-slate-800 p-6 rounded-lg shadow-xl max-w-sm w-full border border-slate-700">
-                                <h3 class="text-xl font-bold text-red-400 mb-3">權限被封鎖</h3>
-                                <p class="text-slate-300">通知權限已被您的瀏覽器封鎖。請前往瀏覽器設定 (網址列旁的鎖頭圖示) 手動開啟權限。</p>
-                                <button onclick="this.parentNode.parentNode.remove()" class="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-white text-sm float-right">我知道了</button>
-                            </div>
-                        </div>
-                    `;
-                    document.body.appendChild(modal);
-                } else {
-                    // 請求權限
-                    const permission = await Notification.requestPermission();
-                    if (permission === 'granted') {
-                        setNotificationsEnabled(true);
-                        sendTestNotification();
-                    }
-                }
-            };
+            // News State
+            const [newsData, setNewsData] = useState([]);
+            const [newsLoading, setNewsLoading] = useState(true);
+            const [newsError, setNewsError] = useState(null);
 
             const sendTestNotification = () => {
                 new Notification("通知已啟用 ✅", {
@@ -372,8 +894,8 @@
 
                     new Notification(`DCA 訊號觸發: ${coinName.toUpperCase()}`, {
                         body: `今日恐懼指數為 ${fngValue}。建議操作：${intensity}`,
-                        icon: coinName === 'bitcoin' 
-                            ? "https://cryptologos.cc/logos/bitcoin-btc-logo.png" 
+                        icon: coinName === 'bitcoin'
+                            ? "https://cryptologos.cc/logos/bitcoin-btc-logo.png"
                             : "https://cryptologos.cc/logos/ethereum-eth-logo.png"
                     });
                 }
@@ -381,7 +903,6 @@
 
             const fetchCurrentPrices = async () => {
                 try {
-                    // 使用 fetch API，這裡不使用 google.search
                     const response = await fetch(
                         'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd&include_24hr_change=true'
                     );
@@ -397,14 +918,13 @@
             const fetchData = async () => {
                 setLoading(true);
                 setError(null);
-
                 fetchCurrentPrices();
 
                 try {
                     const fetchWithTimeout = (url, timeout = 10000) => {
                         return Promise.race([
                             fetch(url),
-                            new Promise((_, reject) => 
+                            new Promise((_, reject) =>
                                 setTimeout(() => reject(new Error('API 請求逾時 (Timeout)，請檢查網路或稍後再試')), timeout)
                             )
                         ]);
@@ -423,7 +943,6 @@
                     const coinResponse = await fetchWithTimeout(
                         `https://api.coingecko.com/api/v3/coins/${selectedCoin}/market_chart?vs_currency=usd&days=365&interval=daily`
                     );
-                    
                     if (!coinResponse.ok) {
                         if (coinResponse.status === 429) {
                             throw new Error("CoinGecko API 請求過於頻繁 (Rate Limit)，請等待 1 分鐘後再重新整理頁面。");
@@ -435,13 +954,49 @@
                     const fngMap = new Map();
                     fngJson.data.forEach(item => {
                         const date = new Date(item.timestamp * 1000).toISOString().split('T')[0];
+
+                        // 翻譯評級
+                        const ratingMap = {
+                            "Extreme Fear": "極度恐懼",
+                            "extreme fear": "極度恐懼",
+                            "Fear": "恐懼",
+                            "fear": "恐懼",
+                            "Neutral": "中立",
+                            "neutral": "中立",
+                            "Greed": "貪婪",
+                            "greed": "貪婪",
+                            "Extreme Greed": "極度貪婪",
+                            "extreme greed": "極度貪婪"
+                        };
+                        rating = ratingMap[rating] || rating;
+
                         fngMap.set(date, {
                             value: parseInt(item.value),
-                            classification: item.value_classification
+                            classification: rating
                         });
                     });
 
-                    setCurrentFNG(fngJson.data[0]);
+                    // 更新 currentFNG 時也需要翻譯
+                    const currentItem = fngJson.data[0];
+                    let currentRating = currentItem.value_classification;
+                    const ratingMap = {
+                        "Extreme Fear": "極度恐懼",
+                        "extreme fear": "極度恐懼",
+                        "Fear": "恐懼",
+                        "fear": "恐懼",
+                        "Neutral": "中立",
+                        "neutral": "中立",
+                        "Greed": "貪婪",
+                        "greed": "貪婪",
+                        "Extreme Greed": "極度貪婪",
+                        "extreme greed": "極度貪婪"
+                    };
+                    currentRating = ratingMap[currentRating] || currentRating;
+
+                    setCurrentFNG({
+                        ...currentItem,
+                        value_classification: currentRating
+                    });
 
                     const mergedData = coinJson.prices.map(([timestamp, price]) => {
                         const dateObj = new Date(timestamp);
@@ -458,13 +1013,11 @@
                     });
 
                     setHistoricalData(mergedData);
-                    setLastUpdated(new Date());
+                    setLastUpdated(new Date()); // Set last updated time
 
                     // 檢查是否需要發送通知
                     const todayFng = parseInt(fngJson.data[0].value);
                     if (todayFng <= 45) {
-                        // 由於閉包問題，直接使用 state 可能會有舊值，我們這裡簡單依賴觸發邏輯中的即時檢查
-                        // 為了確保首次載入能觸發（如果已經開啟），我們傳遞 state
                         triggerBuySignalNotification(todayFng, selectedCoin);
                     }
 
@@ -476,26 +1029,42 @@
                 }
             };
 
+            const fetchNews = async () => {
+                setNewsLoading(true);
+                try {
+                    const response = await fetch('https://api.rss2json.com/v1/api.json?rss_url=https://www.blocktempo.com/feed/');
+                    if (!response.ok) throw new Error('News fetch failed');
+                    const data = await response.json();
+                    if (data.status === 'ok') {
+                        setNewsData(data.items);
+                    } else {
+                        throw new Error('RSS parsing failed');
+                    }
+                } catch (e) {
+                    console.error("News error:", e);
+                    setNewsError(e.message);
+                } finally {
+                    setNewsLoading(false);
+                }
+            };
+
             useEffect(() => {
                 fetchData();
-            }, [selectedCoin]);
+                fetchNews();
+            }, [selectedCoin, notificationsEnabled]); // Added notificationsEnabled to dependency array
 
             const chartData = useMemo(() => {
                 if (!historicalData.length) return null;
-
                 const labels = historicalData.map(d => d.date);
                 const prices = historicalData.map(d => d.price);
-                
                 const pointColors = historicalData.map(d => {
-                    if (d.fng <= 20) return '#ef4444'; 
-                    if (d.fng <= 40) return '#f97316'; 
-                    return 'rgba(0,0,0,0)'; 
+                    if (d.fng <= 20) return '#ef4444';
+                    if (d.fng <= 40) return '#f97316';
+                    return 'rgba(0,0,0,0)';
                 });
-
-                // 修正: 縮小紅點和橘點的尺寸 (pointRadius)
                 const pointRadiuses = historicalData.map(d => {
-                    if (d.fng <= 20) return 3; // 從 6 縮小到 3
-                    if (d.fng <= 40) return 2; // 從 4 縮小到 2
+                    if (d.fng <= 20) return 3;
+                    if (d.fng <= 40) return 2;
                     return 0;
                 });
 
@@ -517,7 +1086,7 @@
                             pointBackgroundColor: pointColors,
                             pointBorderColor: pointColors,
                             pointRadius: pointRadiuses,
-                            pointHoverRadius: 4, // 從 8 縮小到 4
+                            pointHoverRadius: 4,
                             fill: true,
                             tension: 0.4
                         }
@@ -528,14 +1097,9 @@
             const chartOptions = {
                 responsive: true,
                 maintainAspectRatio: false,
-                interaction: {
-                    mode: 'index',
-                    intersect: false,
-                },
+                interaction: { mode: 'index', intersect: false },
                 plugins: {
-                    legend: {
-                        display: false
-                    },
+                    legend: { display: false },
                     tooltip: {
                         backgroundColor: 'rgba(17, 24, 39, 0.9)',
                         titleColor: '#fff',
@@ -547,7 +1111,7 @@
                                 const index = context.dataIndex;
                                 const data = historicalData[index];
                                 return [
-                                    `價格: $${data.price.toLocaleString(undefined, {maximumFractionDigits: 0})}`,
+                                    `價格: $${data.price.toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
                                     `恐懼貪婪指數: ${data.fng} (${data.classification})`,
                                     data.fng <= 40 ? '🔴 建議 DCA 買入點' : '⚪ 觀望/持有'
                                 ];
@@ -556,67 +1120,49 @@
                     }
                 },
                 scales: {
-                    x: {
-                        grid: {
-                            color: 'rgba(75, 85, 99, 0.2)',
-                        },
-                        ticks: {
-                            color: '#9ca3af',
-                            maxTicksLimit: 8
-                        }
-                    },
-                    y: {
-                        grid: {
-                            color: 'rgba(75, 85, 99, 0.2)',
-                        },
-                        ticks: {
-                            color: '#9ca3af',
-                            callback: (value) => `$${value.toLocaleString()}`
-                        }
-                    }
+                    x: { grid: { color: 'rgba(75, 85, 99, 0.2)' }, ticks: { color: '#9ca3af', maxTicksLimit: 8 } },
+                    y: { grid: { color: 'rgba(75, 85, 99, 0.2)' }, ticks: { color: '#9ca3af', callback: (value) => `$${value.toLocaleString()}` } }
                 }
             };
 
             const getSuggestion = () => {
                 if (!currentFNG) return { text: "載入中...", color: "text-gray-400" };
                 const val = parseInt(currentFNG.value);
-                
-                // 策略建議區間以匹配儀表板區間 (0-25, 26-44, 45-55, 56-74, 75-100)
-                if (val <= 25) return { 
-                    title: "極度恐懼 (Extreme Fear)", 
-                    action: "強力買入", 
+                if (val <= 25) return {
+                    title: "極度恐懼 (Extreme Fear)",
+                    action: "強力買入",
                     desc: "市場極度恐慌，這是歷史上最佳的累積籌碼時機。",
                     bg: "bg-red-900/30",
                     border: "border-red-500",
-                    text: "text-red-400" 
+                    text: "text-red-400"
                 };
-                if (val >= 26 && val <= 44) return { 
-                    title: "恐懼 (Fear)", 
-                    action: "分批買入", 
+                if (val >= 26 && val <= 44) return {
+                    title: "恐懼 (Fear)",
+                    action: "分批買入",
                     desc: "市場情緒低迷，適合執行標準 DCA 策略。",
                     bg: "bg-orange-900/30",
                     border: "border-orange-500",
                     text: "text-orange-400"
                 };
-                if (val >= 45 && val <= 55) return { 
-                    title: "中立 (Neutral)", 
-                    action: "持有觀望", 
+                if (val >= 45 && val <= 55) return {
+                    title: "中立 (Neutral)",
+                    action: "持有觀望",
                     desc: "市場方向不明，建議暫停大額買入，保持觀望。",
                     bg: "bg-gray-800",
                     border: "border-gray-600",
                     text: "text-gray-400"
                 };
-                if (val >= 56 && val <= 74) return { 
-                    title: "貪婪 (Greed)", 
-                    action: "停止買入 / 考慮止盈", 
+                if (val >= 56 && val <= 74) return {
+                    title: "貪婪 (Greed)",
+                    action: "停止買入 / 考慮止盈",
                     desc: "市場情緒過熱，風險增加，不建議此時進行 DCA。",
                     bg: "bg-green-900/30",
                     border: "border-green-500",
                     text: "text-green-400"
                 };
-                return { 
-                    title: `極度貪婪 (Extreme Greed)`, 
-                    action: "極高風險 / 止盈", 
+                return {
+                    title: `極度貪婪 (Extreme Greed)`,
+                    action: "極高風險 / 止盈",
                     desc: "市場極度過熱，強烈建議止盈或停止所有買入操作。",
                     bg: "bg-blue-900/30",
                     border: "border-blue-500",
@@ -626,7 +1172,8 @@
 
             const suggestion = getSuggestion();
 
-            const PriceCard = ({ id, name, symbol, iconUrl }) => {
+            // PriceCard component (moved inside CryptoDashboard or defined globally if used elsewhere)
+            const PriceCard = ({ id, name, symbol, iconUrl, selectedCoin, setSelectedCoin, prices }) => {
                 const isSelected = selectedCoin === id;
                 const priceData = prices ? prices[id] : null;
                 const price = priceData ? priceData.usd : null;
@@ -636,11 +1183,10 @@
                 return (
                     <button
                         onClick={() => setSelectedCoin(id)}
-                        className={`flex flex-col flex-1 p-4 rounded-xl border transition-all duration-300 relative overflow-hidden ${
-                            isSelected 
-                                ? 'bg-slate-800 border-blue-500 shadow-lg shadow-blue-500/20' 
-                                : 'bg-slate-900/50 border-slate-800 hover:bg-slate-800 hover:border-slate-700'
-                        }`}
+                        className={`flex flex-col flex-1 p-4 rounded-xl border transition-all duration-300 relative overflow-hidden ${isSelected
+                            ? 'bg-slate-800 border-blue-500 shadow-lg shadow-blue-500/20'
+                            : 'bg-slate-900/50 border-slate-800 hover:bg-slate-800 hover:border-slate-700'
+                            }`}
                     >
                         <div className="flex items-center justify-between w-full mb-2">
                             <div className="flex items-center gap-2">
@@ -649,7 +1195,7 @@
                             </div>
                             {isSelected && <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>}
                         </div>
-                        
+
                         <div className="flex flex-col items-start">
                             <span className="text-xl font-mono text-white">
                                 {price ? `$${price.toLocaleString()}` : 'Loading...'}
@@ -666,6 +1212,238 @@
             };
 
             return (
+                <div className="space-y-6">
+                    {/* 幣種選擇卡片 */}
+                    <div className="flex gap-4 w-full">
+                        <PriceCard
+                            id="bitcoin"
+                            name="Bitcoin"
+                            symbol="BTC"
+                            iconUrl="https://cryptologos.cc/logos/bitcoin-btc-logo.png"
+                            selectedCoin={selectedCoin}
+                            setSelectedCoin={setSelectedCoin}
+                            prices={prices}
+                        />
+                        <PriceCard
+                            id="ethereum"
+                            name="Ethereum"
+                            symbol="ETH"
+                            iconUrl="https://cryptologos.cc/logos/ethereum-eth-logo.png"
+                            selectedCoin={selectedCoin}
+                            setSelectedCoin={setSelectedCoin}
+                            prices={prices}
+                        />
+                    </div>
+
+                    {loading && !historicalData.length ? (
+                        <div className="h-64 flex flex-col items-center justify-center text-slate-500 gap-4">
+                            <RefreshCw className="animate-spin" size={32} />
+                            <p>正在同步真實市場數據...</p>
+                        </div>
+                    ) : error ? (
+                        <div className="bg-red-900/20 border border-red-500/50 text-red-200 p-6 rounded-xl flex items-center gap-4">
+                            <AlertTriangle size={24} className="shrink-0" />
+                            <div>
+                                <h3 className="font-bold text-lg">數據載入失敗</h3>
+                                <p className="text-sm opacity-90 my-2">{error}</p>
+                                <div className="text-xs opacity-70 mb-3">
+                                    這可能是因為 CoinGecko API 限制了訪問頻率 (Rate Limit)，或是瀏覽器安全性限制 (CORS)。
+                                </div>
+                                <button onClick={fetchData} className="px-4 py-2 bg-red-800 hover:bg-red-700 rounded text-sm transition-colors">
+                                    重試連線
+                                </button>
+                            </div>
+                        </div>
+                    ) : (
+                        <React.Fragment>
+                            {/* FNG 儀表板 */}
+                            <div className="bg-slate-900 p-6 rounded-2xl border border-slate-700 shadow-xl flex flex-col items-center">
+                                <h2 className="text-xl font-bold text-slate-200 mb-4">加密貨幣恐懼與貪婪指數</h2>
+                                <FearGreedGauge
+                                    fngValue={currentFNG?.value}
+                                    classification={suggestion.title.split(' ')[0]}
+                                />
+                            </div>
+
+                            {/* 策略建議 */}
+                            <div className={`p-6 rounded-2xl border ${suggestion.border} ${suggestion.bg} relative overflow-hidden transition-all duration-500`}>
+                                <div className="relative z-10 flex flex-col md:flex-row justify-between items-center w-full max-w-lg mx-auto mt-0">
+                                    <div className="flex flex-col items-start text-left mb-4 md:mb-0">
+                                        <div className="text-sm uppercase tracking-wider opacity-70 mb-1">DCA 策略建議</div>
+                                        <span className={`text-2xl font-bold ${suggestion.text}`}>
+                                            {suggestion.title}
+                                        </span>
+                                        <p className="mt-2 text-slate-300 max-w-lg text-sm">
+                                            {suggestion.desc}
+                                        </p>
+                                    </div>
+                                    <div className="flex flex-col items-center md:items-end gap-2 min-w-[140px] text-center md:text-right">
+                                        <div className="text-sm text-slate-400">當前操作</div>
+                                        <div className={`text-xl font-bold ${suggestion.text} border-2 border-current px-4 py-1 rounded-lg whitespace-nowrap`}>
+                                            {suggestion.action}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 價格走勢圖 */}
+                            <div className="bg-slate-900 p-4 rounded-2xl border border-slate-800 shadow-xl">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h2 className="text-lg font-semibold flex items-center gap-2">
+                                        <TrendingUp size={18} className="text-slate-400" />
+                                        價格走勢與買入訊號 ({selectedCoin === 'bitcoin' ? 'BTC' : 'ETH'})
+                                    </h2>
+                                    <div className="flex items-center gap-4 text-xs">
+                                        <div className="flex items-center gap-1">
+                                            <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                                            <span className="text-slate-400">極度恐懼 (強力買入)</span>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                            <span className="w-2 h-2 rounded-full bg-orange-500"></span>
+                                            <span className="text-slate-400">恐懼 (DCA)</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="h-[350px] w-full relative">
+                                    {chartData && <ChartComponent data={chartData} options={chartOptions} />}
+                                </div>
+                                <p className="text-center text-xs text-slate-500 mt-4">
+                                    * 紅點/橘點標記處代表當天恐懼指數低於 40，為歷史回測建議的買入時機。
+                                </p>
+                            </div>
+
+                            {/* 新聞區塊 */}
+                            <div className="mt-8">
+                                <div className="flex items-center gap-2 mb-6">
+                                    <Newspaper className="text-blue-500" />
+                                    <h2 className="text-xl font-bold text-slate-200">今日幣圈頭條</h2>
+                                </div>
+
+                                {!newsLoading && !newsError && newsData.length > 0 && (
+                                    <NewsSummary news={newsData} />
+                                )}
+
+                                <NewsSection news={newsData} loading={newsLoading} error={newsError} />
+                            </div>
+
+                            <div className="grid md:grid-cols-2 gap-4">
+                                <div className="bg-slate-900 p-5 rounded-xl border border-slate-800">
+                                    <h3 className="font-bold text-slate-200 mb-3 flex items-center gap-2">
+                                        <Smartphone size={18} />
+                                        App 通知機制
+                                    </h3>
+                                    <ul className="space-y-2 text-sm text-slate-400">
+                                        <li className="flex gap-2">
+                                            <span className="text-blue-500">•</span>
+                                            <span>請點擊右上角開關開啟通知權限。</span>
+                                        </li>
+                                        <li className="flex gap-2">
+                                            <span className="text-blue-500">•</span>
+                                            <span>當指數 &lt; 25 (極度恐懼)：跳出強力買入通知。</span>
+                                        </li>
+                                        <li className="flex gap-2">
+                                            <span className="text-blue-500">•</span>
+                                            <span>當指數 26-44 (恐懼)：跳出標準 DCA 通知。 (已根據最新圖表調整)</span>
+                                        </li>
+                                        <li className="flex gap-2">
+                                            <span className="text-blue-500">•</span>
+                                            <span>每日早上 8:00 (UTC+8) 更新數據時觸發。</span>
+                                        </li>
+                                    </ul>
+                                </div>
+
+                                <div className="bg-slate-900 p-5 rounded-xl border border-slate-800">
+                                    <h3 className="font-bold text-slate-200 mb-3 flex items-center gap-2">
+                                        <Info size={18} />
+                                        關於數據來源
+                                    </h3>
+                                    <div className="text-sm text-slate-400 space-y-2">
+                                        <p>
+                                            <strong>價格數據:</strong> CoinGecko V3 API (每日收盤價 & 即時報價)
+                                        </p>
+                                        <p>
+                                            <strong>情緒指標:</strong> Alternative.me Crypto Fear & Greed Index
+                                        </p>
+                                        <p className="text-xs text-slate-500 mt-2 border-t border-slate-800 pt-2">
+                                            最後更新: {lastUpdated ? lastUpdated.toLocaleString() : '-'}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </React.Fragment>
+                    )}
+                </div>
+            );
+        };
+
+        const App = () => {
+            const [activeTab, setActiveTab] = useState('crypto'); // 'crypto' or 'stock'
+            const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+
+            // 初始檢查通知權限
+            useEffect(() => {
+                if ("Notification" in window && Notification.permission === 'granted') {
+                    setNotificationsEnabled(true);
+                }
+            }, []);
+
+            // 處理通知開關切換
+            const toggleNotifications = async () => {
+                if (!("Notification" in window)) {
+                    // 使用 custom modal UI 替換 alert
+                    const modal = document.createElement('div');
+                    modal.innerHTML = `
+                        <div class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
+                            <div class="bg-slate-800 p-6 rounded-lg shadow-xl max-w-sm w-full border border-slate-700">
+                                <h3 class="text-xl font-bold text-white mb-3">通知功能不支援</h3>
+                                <p class="text-slate-300">此瀏覽器不支援 Web Notification API。請嘗試使用 Chrome, Firefox 或 Edge 瀏覽器。</p>
+                                <button onclick="this.parentNode.parentNode.remove()" class="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-white text-sm float-right">確定</button>
+                            </div>
+                        </div>
+                    `;
+                    document.body.appendChild(modal);
+                    return;
+                }
+
+                // 如果目前是開啟狀態 -> 關閉 (Local Mute)
+                if (notificationsEnabled) {
+                    setNotificationsEnabled(false);
+                    return;
+                }
+
+                // 如果目前是關閉狀態 -> 開啟
+                if (Notification.permission === 'granted') {
+                    setNotificationsEnabled(true);
+                    new Notification("通知已啟用 ✅", {
+                        body: "Smart DCA Bot 已準備好！當恐懼指數達到買入區間時，我們會立即通知您。",
+                        icon: "https://cryptologos.cc/logos/bitcoin-btc-logo.png"
+                    });
+                } else if (Notification.permission === 'denied') {
+                    const modal = document.createElement('div');
+                    modal.innerHTML = `
+                        <div class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
+                            <div class="bg-slate-800 p-6 rounded-lg shadow-xl max-w-sm w-full border border-slate-700">
+                                <h3 class="text-xl font-bold text-red-400 mb-3">權限被封鎖</h3>
+                                <p class="text-slate-300">通知權限已被您的瀏覽器封鎖。請前往瀏覽器設定 (網址列旁的鎖頭圖示) 手動開啟權限。</p>
+                                <button onclick="this.parentNode.parentNode.remove()" class="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-white text-sm float-right">我知道了</button>
+                            </div>
+                        </div>
+                    `;
+                    document.body.appendChild(modal);
+                } else {
+                    // 請求權限
+                    const permission = await Notification.requestPermission();
+                    if (permission === 'granted') {
+                        setNotificationsEnabled(true);
+                        new Notification("通知已啟用 ✅", {
+                            body: "Smart DCA Bot 已準備好！當恐懼指數達到買入區間時，我們會立即通知您。",
+                            icon: "https://cryptologos.cc/logos/bitcoin-btc-logo.png"
+                        });
+                    }
+                }
+            };
+
+            return (
                 <div className="min-h-screen bg-slate-950 text-slate-100 font-sans pb-10">
                     <header className="bg-slate-900 border-b border-slate-800 p-4 sticky top-0 z-10 shadow-lg">
                         <div className="max-w-4xl mx-auto flex justify-between items-center">
@@ -675,23 +1453,21 @@
                                     Smart DCA Bot
                                 </h1>
                             </div>
-                            
+
                             {/* iOS Style Notification Toggle */}
                             <div className="flex items-center gap-3">
                                 <span className={`text-sm font-medium transition-colors ${notificationsEnabled ? 'text-white' : 'text-slate-500'}`}>
                                     {notificationsEnabled ? '通知已開啟' : '每日通知'}
                                 </span>
-                                <button 
+                                <button
                                     onClick={toggleNotifications}
-                                    className={`w-12 h-7 rounded-full p-1 transition-all duration-300 ease-in-out focus:outline-none relative ${
-                                        notificationsEnabled ? 'bg-green-500' : 'bg-slate-600'
-                                    }`}
+                                    className={`w-12 h-7 rounded-full p-1 transition-all duration-300 ease-in-out focus:outline-none relative ${notificationsEnabled ? 'bg-green-500' : 'bg-slate-600'
+                                        }`}
                                     title={notificationsEnabled ? "關閉通知" : "開啟通知"}
                                 >
-                                    <div 
-                                        className={`w-5 h-5 bg-white rounded-full shadow-md transform transition-transform duration-300 ease-in-out ${
-                                            notificationsEnabled ? 'translate-x-5' : 'translate-x-0'
-                                        }`} 
+                                    <div
+                                        className={`w-5 h-5 bg-white rounded-full shadow-md transform transition-transform duration-300 ease-in-out ${notificationsEnabled ? 'translate-x-5' : 'translate-x-0'
+                                            }`}
                                     />
                                 </button>
                             </div>
@@ -699,153 +1475,45 @@
                     </header>
 
                     <main className="max-w-4xl mx-auto p-4 space-y-6">
-                        
-                        <div className="flex gap-4 w-full">
-                            <PriceCard 
-                                id="bitcoin" 
-                                name="Bitcoin" 
-                                symbol="BTC" 
-                                iconUrl="https://cryptologos.cc/logos/bitcoin-btc-logo.png" 
-                            />
-                            <PriceCard 
-                                id="ethereum" 
-                                name="Ethereum" 
-                                symbol="ETH" 
-                                iconUrl="https://cryptologos.cc/logos/ethereum-eth-logo.png" 
-                            />
+                        {/* Tab 切換 */}
+                        <div className="flex justify-center mb-6">
+                            <div className="bg-slate-900 p-1 rounded-xl border border-slate-800 flex gap-1">
+                                <button
+                                    onClick={() => setActiveTab('crypto')}
+                                    className={`px-6 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${activeTab === 'crypto'
+                                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
+                                        : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                                        }`}
+                                >
+                                    <TrendingUp size={16} />
+                                    加密貨幣
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab('stock')}
+                                    className={`px-6 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${activeTab === 'stock'
+                                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
+                                        : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                                        }`}
+                                >
+                                    <Globe size={16} />
+                                    美股市場
+                                </button>
+                            </div>
                         </div>
 
-                        {loading && !historicalData.length ? (
-                            <div className="h-64 flex flex-col items-center justify-center text-slate-500 gap-4">
-                                <RefreshCw className="animate-spin" size={32} />
-                                <p>正在同步真實市場數據...</p>
-                            </div>
-                        ) : error ? (
-                            <div className="bg-red-900/20 border border-red-500/50 text-red-200 p-6 rounded-xl flex items-center gap-4">
-                                <AlertTriangle size={24} className="shrink-0" />
-                                <div>
-                                    <h3 className="font-bold text-lg">數據載入失敗</h3>
-                                    <p className="text-sm opacity-90 my-2">{error}</p>
-                                    <div className="text-xs opacity-70 mb-3">
-                                        這可能是因為 CoinGecko API 限制了訪問頻率 (Rate Limit)，或是瀏覽器安全性限制 (CORS)。
-                                    </div>
-                                    <button 
-                                        onClick={fetchData} 
-                                        className="px-4 py-2 bg-red-800 hover:bg-red-700 rounded text-sm transition-colors"
-                                    >
-                                        重試連線
-                                    </button>
-                                </div>
-                            </div>
+                        {/* 內容顯示 */}
+                        {activeTab === 'crypto' ? (
+                            <CryptoDashboard
+                                notificationsEnabled={notificationsEnabled}
+                                toggleNotifications={toggleNotifications}
+                            />
                         ) : (
-                            <React.Fragment>
-                                {/* 1. FNG 儀表板獨立區塊 - 確保獨立顯示 */}
-                                <div className="bg-slate-900 p-6 rounded-2xl border border-slate-700 shadow-xl flex flex-col items-center">
-                                    <h2 className="text-xl font-bold text-slate-200 mb-4">加密貨幣恐懼與貪婪指數</h2>
-                                    <FearGreedGauge 
-                                        fngValue={currentFNG?.value} 
-                                        classification={suggestion.title.split(' ')[0]} // 傳遞 "極度恐懼" 等中文分類
-                                    />
-                                </div>
-
-                                {/* 2. 策略建議區塊 - 使用原有的顏色邊框邏輯 */}
-                                <div className={`p-6 rounded-2xl border ${suggestion.border} ${suggestion.bg} relative overflow-hidden transition-all duration-500`}>
-                                    <div className="relative z-10 flex flex-col md:flex-row justify-between items-center w-full max-w-lg mx-auto mt-0">
-                                        
-                                        {/* 建議操作和描述 */}
-                                        <div className="flex flex-col items-start text-left mb-4 md:mb-0">
-                                            <div className="text-sm uppercase tracking-wider opacity-70 mb-1">DCA 策略建議</div>
-                                            <span className={`text-2xl font-bold ${suggestion.text}`}>
-                                                {suggestion.title}
-                                            </span>
-                                            <p className="mt-2 text-slate-300 max-w-lg text-sm">
-                                                {suggestion.desc}
-                                            </p>
-                                        </div>
-                                        
-                                        {/* 建議操作 */}
-                                        <div className="flex flex-col items-center md:items-end gap-2 min-w-[140px] text-center md:text-right">
-                                            <div className="text-sm text-slate-400">當前操作</div>
-                                            <div className={`text-xl font-bold ${suggestion.text} border-2 border-current px-4 py-1 rounded-lg whitespace-nowrap`}>
-                                                {suggestion.action}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="bg-slate-900 p-4 rounded-2xl border border-slate-800 shadow-xl">
-                                    <div className="flex justify-between items-center mb-4">
-                                        <h2 className="text-lg font-semibold flex items-center gap-2">
-                                            <TrendingUp size={18} className="text-slate-400" />
-                                            價格走勢與買入訊號 ({selectedCoin === 'bitcoin' ? 'BTC' : 'ETH'})
-                                        </h2>
-                                        <div className="flex items-center gap-4 text-xs">
-                                            <div className="flex items-center gap-1">
-                                                <span className="w-2 h-2 rounded-full bg-red-500"></span>
-                                                <span className="text-slate-400">極度恐懼 (強力買入)</span>
-                                            </div>
-                                            <div className="flex items-center gap-1">
-                                                <span className="w-2 h-2 rounded-full bg-orange-500"></span>
-                                                <span className="text-slate-400">恐懼 (DCA)</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                    <div className="h-[350px] w-full relative">
-                                        {/* 使用自定義 ChartComponent */}
-                                        {chartData && <ChartComponent data={chartData} options={chartOptions} />}
-                                    </div>
-                                    <p className="text-center text-xs text-slate-500 mt-4">
-                                        * 紅點/橘點標記處代表當天恐懼指數低於 40，為歷史回測建議的買入時機。
-                                    </p>
-                                </div>
-
-                                <div className="grid md:grid-cols-2 gap-4">
-                                    <div className="bg-slate-900 p-5 rounded-xl border border-slate-800">
-                                        <h3 className="font-bold text-slate-200 mb-3 flex items-center gap-2">
-                                            <Smartphone size={18} />
-                                            App 通知機制
-                                        </h3>
-                                        <ul className="space-y-2 text-sm text-slate-400">
-                                            <li className="flex gap-2">
-                                                <span className="text-blue-500">•</span>
-                                                <span>請點擊右上角開關開啟通知權限。</span>
-                                            </li>
-                                            <li className="flex gap-2">
-                                                <span className="text-blue-500">•</span>
-                                                <span>當指數 &lt; 25 (極度恐懼)：跳出強力買入通知。</span>
-                                            </li>
-                                            <li className="flex gap-2">
-                                                <span className="text-blue-500">•</span>
-                                                <span>當指數 26-44 (恐懼)：跳出標準 DCA 通知。 (已根據最新圖表調整)</span>
-                                            </li>
-                                            <li className="flex gap-2">
-                                                <span className="text-blue-500">•</span>
-                                                <span>每日早上 8:00 (UTC+8) 更新數據時觸發。</span>
-                                            </li>
-                                        </ul>
-                                    </div>
-
-                                    <div className="bg-slate-900 p-5 rounded-xl border border-slate-800">
-                                        <h3 className="font-bold text-slate-200 mb-3 flex items-center gap-2">
-                                            <Info size={18} />
-                                            關於數據來源
-                                        </h3>
-                                        <div className="text-sm text-slate-400 space-y-2">
-                                            <p>
-                                                <strong>價格數據:</strong> CoinGecko V3 API (每日收盤價 & 即時報價)
-                                            </p>
-                                            <p>
-                                                <strong>情緒指標:</strong> Alternative.me Crypto Fear & Greed Index
-                                            </p>
-                                            <p className="text-xs text-slate-500 mt-2 border-t border-slate-800 pt-2">
-                                                最後更新: {lastUpdated ? lastUpdated.toLocaleString() : '-'}
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </React.Fragment>
+                            <StockDashboard
+                                notificationsEnabled={notificationsEnabled}
+                                toggleNotifications={toggleNotifications}
+                            />
                         )}
+
                     </main>
                 </div>
             );
@@ -855,4 +1523,5 @@
         root.render(<App />);
     </script>
 </body>
+
 </html>
