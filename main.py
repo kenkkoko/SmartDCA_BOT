@@ -107,7 +107,7 @@ def main():
     triggers = []
     
     if crypto_fng is not None and crypto_fng <= FEAR_THRESHOLD:
-        triggers.append(f"₿ Crypto: {crypto_fng} ({get_status_text(crypto_fng)} {get_status_emoji(crypto_fng)})")
+        triggers.append(f"₿ 加密貨幣: {crypto_fng} ({get_status_text(crypto_fng)} {get_status_emoji(crypto_fng)})")
     
     if us_stock_fng is not None and us_stock_fng <= FEAR_THRESHOLD:
         triggers.append(f"🇺🇸 美股: {us_stock_fng} ({get_status_text(us_stock_fng)} {get_status_emoji(us_stock_fng)})")
@@ -144,4 +144,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
