@@ -79,6 +79,28 @@ def fetch_tw_stock_rsi(ticker="0050.TW"):
         print(f"Error fetching TW Stock RSI: {e}")
         return None
 
+def fetch_price_stats(ticker):
+    """Fetches current price and 1-year high/low"""
+    try:
+        ticker_obj = yf.Ticker(ticker)
+        # Fetch 1 year of history
+        hist = ticker_obj.history(period="1y")
+        if hist.empty:
+            return None
+        
+        current_price = hist['Close'].iloc[-1]
+        year_high = hist['Close'].max()
+        year_low = hist['Close'].min()
+        
+        return {
+            "current": current_price,
+            "high": year_high,
+            "low": year_low
+        }
+    except Exception as e:
+        print(f"Error fetching price stats for {ticker}: {e}")
+        return None
+
 def get_status_emoji(value):
     if value <= EXTREME_FEAR_THRESHOLD:
         return "🔴" # Extreme Fear
@@ -107,11 +129,16 @@ def generate_ai_advice(market_status_list):
 
         請根據以下觸發的市場數據，提供一個**簡潔、明確**的操作建議 (50字以內)。
 
-        **分析重點：**
-        1. 立即指出市場是否處於「極度恐懼」(FNG/RSI <= 25)。
-        2. 強調如果市場處於極度恐懼區間，應當**立即執行最大額度**的 DCA 投入。
-        3. 如果市場處於「恐懼」(FNG/RSI <= 44)，建議保持耐心，**按計劃分批小額買入**。
-        4. 如果同時有多個市場觸發訊號，請給出綜合建議。
+        **核心任務：**
+        1. 分析當前的 FNG/RSI 數值所代表的市場情緒強度。
+        2. 根據情緒強度，結合資產名稱和當前價格，根據歷史價格高低點與情緒指標判斷 並分析歷史高點與當前價格相差幾%。
+        3. 根據以下行動邏輯，生成一段富有洞察力和鼓勵性的建議。
+
+        **行動邏輯：**
+        - 極度恐懼 (<= 25): 立即建議「強力分批買入」或「執行最大額度投入」。
+        - 恐懼 (26 - 44): 建議「小額分批買入」，鼓勵保持紀律。
+        - 中立 (45 - 55): 建議「維持觀望，不買也不賣」。
+        - 貪婪 (56 - 74) 極度貪婪 (>= 75):: 建議「停止買入，開始小額分批賣出 (止盈)」。
 
         當前觸發的市場狀態:
         {chr(10).join(market_status_list)}
@@ -143,7 +170,18 @@ def main():
     triggers = []
     
     if crypto_fng is not None and crypto_fng <= FEAR_THRESHOLD:
-        triggers.append(f"🪙 加密貨幣: {crypto_fng} ({get_status_text(crypto_fng)} {get_status_emoji(crypto_fng)})")
+        msg = f"🪙 加密貨幣: {crypto_fng} ({get_status_text(crypto_fng)} {get_status_emoji(crypto_fng)})"
+        
+        # Fetch Price Stats for BTC and ETH
+        btc_stats = fetch_price_stats("BTC-USD")
+        if btc_stats:
+            msg += f"\n   - BTC: ${btc_stats['current']:,.0f} (1Y High: ${btc_stats['high']:,.0f}, Low: ${btc_stats['low']:,.0f})"
+            
+        eth_stats = fetch_price_stats("ETH-USD")
+        if eth_stats:
+            msg += f"\n   - ETH: ${eth_stats['current']:,.0f} (1Y High: ${eth_stats['high']:,.0f}, Low: ${eth_stats['low']:,.0f})"
+            
+        triggers.append(msg)
     
     if us_stock_fng is not None and us_stock_fng <= FEAR_THRESHOLD:
         triggers.append(f"🇺🇸 美股: {us_stock_fng} ({get_status_text(us_stock_fng)} {get_status_emoji(us_stock_fng)})")
