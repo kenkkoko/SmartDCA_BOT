@@ -9,10 +9,12 @@ from linebot.v3.messaging import (
     BroadcastRequest,
     TextMessage
 )
+import google.generativeai as genai
 
 # --- Configuration ---
 # ⚠️ Critical: Read tokens from environment variables for security
 LINE_CHANNEL_ACCESS_TOKEN = os.environ.get('LINE_CHANNEL_ACCESS_TOKEN')
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
 # LINE_USER_ID is no longer needed for broadcast, but keeping it in env is fine
 
 # Thresholds
@@ -91,6 +93,38 @@ def get_status_text(value, is_rsi=False):
         return "RSI偏低" if is_rsi else "恐懼"
     return "安全/貪婪"
 
+def generate_ai_advice(market_status_list):
+    """Generates DCA advice using Gemini AI"""
+    if not GEMINI_API_KEY:
+        return "⚠️ AI 建議無法產生 (未設定 API Key)"
+
+    try:
+        genai.configure(api_key=GEMINI_API_KEY)
+        model = genai.GenerativeModel('gemini-2.0-flash')
+        
+        prompt = f"""
+        你是一位極度穩健的 DCA (平均成本法) 投資顧問。你的核心策略是嚴格遵守「在市場情緒極度恐懼時才強力買入」的紀律。
+
+        請根據以下觸發的市場數據，提供一個**簡潔、明確**的操作建議 (50字以內)。
+
+        **分析重點：**
+        1. 立即指出市場是否處於「極度恐懼」(FNG/RSI <= 25)。
+        2. 強調如果市場處於極度恐懼區間，應當**立即執行最大額度**的 DCA 投入。
+        3. 如果市場處於「恐懼」(FNG/RSI <= 44)，建議保持耐心，**按計劃分批小額買入**。
+        4. 如果同時有多個市場觸發訊號，請給出綜合建議。
+
+        當前觸發的市場狀態:
+        {chr(10).join(market_status_list)}
+
+        根據以上資訊，你的行動建議是？
+        """
+        
+        response = model.generate_content(prompt)
+        return response.text.strip()
+    except Exception as e:
+        print(f"Error generating AI advice: {e}")
+        return "⚠️ AI 暫時無法提供建議"
+
 def main():
     if not LINE_CHANNEL_ACCESS_TOKEN:
         print("Error: LINE_CHANNEL_ACCESS_TOKEN not set.")
@@ -125,6 +159,12 @@ def main():
     # Construct Message
     message_text = "🔥 Smart DCA 訊號觸發 🔥\n\n"
     message_text += "\n".join(triggers)
+    
+    # Generate AI Advice
+    print("Generating AI advice...")
+    ai_advice = generate_ai_advice(triggers)
+    message_text += f"\n\n🤖 **AI 投資顧問建議**:\n{ai_advice}"
+    
     message_text += "\n\n💡 建議分批進場"
 
     print("Broadcasting LINE notification...")
