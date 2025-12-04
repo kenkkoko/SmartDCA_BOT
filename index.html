@@ -236,17 +236,18 @@
                 if (marketData) {
                     setLoading(true);
                     const prompt = `
-                    你是一位專業的投資顧問。根據以下 ${assetName} 的市場數據，提供一個簡短的 DCA (平均成本法) 操作建議 (70字以內)。
-                    **判斷邏輯：**
-
+                    你是一位專業的投資顧問。根據以下 ${assetName} 的市場數據，提供一個簡短的 DCA (平均成本法) 操作建議 (50字以內)。
+                    **核心任務：**
+                    1. 分析當前的 FNG/RSI 數值所代表的市場情緒強度。
+                    2. 根據情緒強度，結合資產名稱和當前價格，根據價格低點與情緒指標判斷。
+                    3. 根據以下行動邏輯，生成一段富有洞察力和鼓勵性的建議。
+                    **行動邏輯：**
                     - 極度恐懼 (<= 25): 立即建議「強力分批買入」或「執行最大額度投入」。
                     - 恐懼 (26 - 44): 建議「小額分批買入」，鼓勵保持紀律。
                     - 中立 (45 - 55): 建議「維持觀望，不買也不賣」。
-                    - 貪婪 (56 - 74): 建議「停止買入，開始小額分批賣出 (止盈)」。
-                    - 極度貪婪 (>= 75): 建議「停止買入，執行最大額度分批賣出 (止盈)」。
+                    - 貪婪 (56 - 74) 極度貪婪 (>= 75):: 建議「停止買入，開始小額分批賣出 (止盈)」。
                     市場數據:
                     ${marketData}
-                    
                     建議風格: 理性、穩健、鼓勵分批進場。請用繁體中文回答。
                     `;
                     fetchGeminiAdvice(prompt).then(text => {
@@ -1939,7 +1940,7 @@
                             </div>
 
                             {/* AI Advice Integration */}
-                            {currentFNG && prices && (
+                            {currentFNG && prices && historicalData.length > 0 && (
                                 <div className="mb-6">
                                     <AIAdviceBlock
                                         assetName={`加密貨幣 (${selectedCoin.toUpperCase()})`}
@@ -1947,6 +1948,8 @@
                                             資產: ${selectedCoin.toUpperCase()}
                                             價格: $${prices[selectedCoin]?.usd || 'N/A'}
                                             恐懼貪婪指數: ${currentFNG.value} (${currentFNG.value_classification})
+                                            近一年最高價: $${Math.max(...historicalData.map(d => d.price)).toLocaleString()}
+                                            近一年最低價: $${Math.min(...historicalData.map(d => d.price)).toLocaleString()}
                                         `}
                                     />
                                 </div>
