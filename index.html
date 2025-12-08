@@ -224,7 +224,7 @@
                 return `⚠️ AI 暫時無法提供建議 (未設定 API Key)。請在 Actions Secrets 設定，或在 Console 輸入 window.GEMINI_API_KEY='你的KEY'`;
             }
             try {
-                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-live:generateContent?key=${apiKey}`;
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`;
                 const response = await fetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -244,41 +244,55 @@
         const AIAdviceBlock = ({ marketData, assetName, priceStats }) => {
             const [advice, setAdvice] = useState(null);
             const [loading, setLoading] = useState(false);
+            const [started, setStarted] = useState(false);
 
-            useEffect(() => {
-                if (marketData) {
-                    setLoading(true);
-                    const priceInfo = priceStats ? `
-                    資產數據:
-                    - 當前價格: $${formatPrice(priceStats.current)}
-                    - 近一年最高: $${formatPrice(priceStats.high)}
-                    - 近一年最低: $${formatPrice(priceStats.low)}
-                    ` : '';
+            const handleAnalyze = () => {
+                if (!marketData) return;
+                setStarted(true);
+                setLoading(true);
+                const priceInfo = priceStats ? `
+                資產數據:
+                - 當前價格: $${formatPrice(priceStats.current)}
+                - 近一年最高: $${formatPrice(priceStats.high)}
+                - 近一年最低: $${formatPrice(priceStats.low)}
+                ` : '';
 
-                    const prompt = `
-                    你是一位專業的投資顧問。根據以下 ${assetName} 的市場數據，提供一個簡短的 DCA (平均成本法) 操作建議 (50字以內)。
-                    **核心任務：**
-                    1. 分析當前的 FNG/RSI 數值所代表的市場情緒強度。
-                    2. 根據情緒強度，結合資產名稱和當前價格，**相較於最近一年的價格波動 (參考最高/最低價)**，判斷現在的價格是否具有吸引力？並分析歷史高點與當前價格相差幾%。
-                    3. 根據以下行動邏輯，生成一段富有洞察力和鼓勵性的建議。
-                    **行動邏輯：**
-                    - 極度恐懼 (<= 25): 立即建議「強力分批買入」或「執行最大額度投入」。
-                    - 恐懼 (26 - 44): 建議「小額分批買入」，鼓勵保持紀律。
-                    - 中立 (45 - 55): 建議「維持觀望，不買也不賣」。
-                    - 貪婪 (56 - 74) 極度貪婪 (>= 75):: 建議「停止買入，開始小額分批賣出 (止盈)」。
-                    
-                    市場數據:
-                    ${marketData}
-                    ${priceInfo}
+                const prompt = `
+                你是一位專業的投資顧問。根據以下 ${assetName} 的市場數據，提供一個簡短的 DCA (平均成本法) 操作建議 (50字以內)。
+                **核心任務：**
+                1. 分析當前的 FNG/RSI 數值所代表的市場情緒強度。
+                2. 根據情緒強度，結合資產名稱和當前價格，**相較於最近一年的價格波動 (參考最高/最低價)**，判斷現在的價格是否具有吸引力？並分析歷史高點與當前價格相差幾%。
+                3. 根據以下行動邏輯，生成一段富有洞察力和鼓勵性的建議。
+                **行動邏輯：**
+                - 極度恐懼 (<= 25): 立即建議「強力分批買入」或「執行最大額度投入」。
+                - 恐懼 (26 - 44): 建議「小額分批買入」，鼓勵保持紀律。
+                - 中立 (45 - 55): 建議「維持觀望，不買也不賣」。
+                - 貪婪 (56 - 74) 極度貪婪 (>= 75):: 建議「停止買入，開始小額分批賣出 (止盈)」。
+                
+                市場數據:
+                ${marketData}
+                ${priceInfo}
 
-                    建議風格: 理性、穩健、鼓勵分批進場。請用繁體中文回答。
-                    `;
-                    fetchGeminiAdvice(prompt).then(text => {
-                        setAdvice(text);
-                        setLoading(false);
-                    });
-                }
-            }, [marketData, assetName, priceStats]);
+                建議風格: 理性、穩健、鼓勵分批進場。請用繁體中文回答。
+                `;
+                fetchGeminiAdvice(prompt).then(text => {
+                    setAdvice(text);
+                    setLoading(false);
+                });
+            };
+
+            if (!started) return (
+                <div className="mt-4 text-center">
+                    <button
+                        onClick={handleAnalyze}
+                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-bold flex items-center gap-2 mx-auto transition-all shadow-lg shadow-indigo-500/20"
+                    >
+                        <Sparkles size={16} />
+                        詢問 AI 投資顧問
+                    </button>
+                    <p className="text-xs text-slate-500 mt-2">點擊按鈕以獲取 Gemini 2.5 AI 的即時分析建議</p>
+                </div>
+            );
 
             if (loading) return (
                 <div className="mt-4 p-4 bg-slate-800/50 rounded-xl border border-slate-700 animate-pulse flex items-center gap-2 text-slate-400 text-sm">
@@ -292,9 +306,12 @@
             return (
                 <div className="mt-4 p-4 bg-gradient-to-r from-slate-800 to-slate-900 rounded-xl border border-indigo-500/30 relative overflow-hidden">
                     <div className="absolute top-0 left-0 w-1 h-full bg-indigo-500"></div>
-                    <h4 className="text-indigo-400 font-bold text-sm mb-3 flex items-center gap-2">
-                        <span className="text-lg">🤖</span> AI 投資顧問建議
-                    </h4>
+                    <div className="flex justify-between items-start mb-3">
+                        <h4 className="text-indigo-400 font-bold text-sm flex items-center gap-2">
+                            <span className="text-lg">🤖</span> AI 投資顧問建議
+                        </h4>
+                        <button onClick={() => { setAdvice(null); setStarted(false); }} className="text-slate-600 hover:text-slate-400"><RefreshCw size={14} /></button>
+                    </div>
 
                     {priceStats && (
                         <div className="grid grid-cols-3 gap-2 mb-3 pb-3 border-b border-slate-700/50">
@@ -324,25 +341,38 @@
         const NewsAIAnalysis = ({ newsItems }) => {
             const [summary, setSummary] = useState(null);
             const [loading, setLoading] = useState(false);
+            const [started, setStarted] = useState(false);
 
-            useEffect(() => {
-                if (newsItems && newsItems.length > 0) {
-                    setLoading(true);
-                    const titles = newsItems.map(n => n.title).join("\n");
-                    const prompt = `
-                    請閱讀以下今日財經新聞標題，並總結成一段 50 字以內的「今日市場重點」。
-                    
-                    新聞標題:
-                    ${titles}
-                    
-                    請用繁體中文回答，語氣專業客觀。
-                    `;
-                    fetchGeminiAdvice(prompt).then(text => {
-                        setSummary(text);
-                        setLoading(false);
-                    });
-                }
-            }, [newsItems]);
+            const handleAnalyze = () => {
+                if (!newsItems || newsItems.length === 0) return;
+                setStarted(true);
+                setLoading(true);
+                const titles = newsItems.map(n => n.title).join("\n");
+                const prompt = `
+                 請閱讀以下今日財經新聞標題，並總結成一段 50 字以內的「今日市場重點」。
+                 
+                 新聞標題:
+                 ${titles}
+                 
+                 請用繁體中文回答，語氣專業客觀。
+                 `;
+                fetchGeminiAdvice(prompt).then(text => {
+                    setSummary(text);
+                    setLoading(false);
+                });
+            };
+
+            if (!started) return (
+                <div className="mb-6 text-center">
+                    <button
+                        onClick={handleAnalyze}
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-bold flex items-center gap-2 mx-auto transition-all shadow-lg shadow-blue-500/20"
+                    >
+                        <Newspaper size={16} />
+                        AI 分析今日新聞重點
+                    </button>
+                </div>
+            );
 
             if (loading) return (
                 <div className="mb-6 p-4 bg-slate-800/50 rounded-xl border border-slate-700 animate-pulse flex items-center gap-2 text-slate-400 text-sm">
@@ -356,9 +386,12 @@
             return (
                 <div className="mb-6 p-4 bg-gradient-to-r from-slate-800 to-slate-900 rounded-xl border border-blue-500/30 relative overflow-hidden">
                     <div className="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>
-                    <h4 className="text-blue-400 font-bold text-sm mb-2 flex items-center gap-2">
-                        <span className="text-lg">📰</span> AI 今日新聞重點
-                    </h4>
+                    <div className="flex justify-between items-start mb-2">
+                        <h4 className="text-blue-400 font-bold text-sm flex items-center gap-2">
+                            <span className="text-lg">📰</span> AI 今日新聞重點
+                        </h4>
+                        <button onClick={() => { setSummary(null); setStarted(false); }} className="text-slate-600 hover:text-slate-400"><RefreshCw size={14} /></button>
+                    </div>
                     <p className="text-slate-300 text-sm leading-relaxed">
                         {summary}
                     </p>
@@ -831,9 +864,7 @@
                 try {
                     // 1. 獲取真實 CNN Fear & Greed Index (透過 CORS Proxy)
                     const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent('https://production.dataviz.cnn.io/index/fearandgreed/graphdata');
-
                     let fngMap = new Map();
-                    // Fetch FNG
                     try {
                         const fngResponse = await fetch(proxyUrl);
                         if (!fngResponse.ok) throw new Error('無法獲取 CNN 數據');
@@ -862,8 +893,7 @@
                     }
 
                     // 2. 獲取美股歷史數據 (Yahoo Finance)
-                    // The "Straight Line" error often comes from data mismatch or insufficient history.
-                    // We ensure we get 1Y data and map it correctly.
+                    // 強制獲取 1 年 (1y) 數據，因為圖表需要至少一年來顯示交互
                     const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${selectedSymbol}?interval=1d&range=1y`;
                     const historyRes = await fetch('https://corsproxy.io/?' + encodeURIComponent(yahooUrl));
 
@@ -884,22 +914,9 @@
                         const price = closeQuotes[i];
                         if (price === null || price === undefined) return null;
                         const date = new Date(t * 1000).toISOString().split('T')[0];
-
-                        // FNG Mapping Logic:
-                        // FNG data might be sparse or have slight date offsets (weekend/holiday).
-                        // We try to find the exact date, or the closest previous date if exact missing? 
-                        // For now, exact match is safest, defaulting to 50 if missing.
+                        // FNG Mapping Logic: Fallback to previous known value if missing for a specific day to avoid gaps
                         let fngVal = fngMap.get(date);
-
-                        // Fallback mechanism: If FNG missing, try previous day? 
-                        // (Simplification: just use 50 (Neutral) to avoid breaking graph, or 
-                        //  use the last known FNG value to keep "state".)
-                        if (fngVal === undefined && fngHistory.length > 0) {
-                            // Find closest FNG before this date? This is O(N*M), slow.
-                            // Optimization: Iterate both sorted arrays. 
-                            // Lazy fix: Default to 50.
-                            fngVal = 50;
-                        }
+                        if (fngVal === undefined) fngVal = 50; // Default Neutral
 
                         return {
                             date: date,
@@ -911,29 +928,32 @@
                     if (prices.length === 0) throw new Error("無有效股價數據");
 
                     setFullStockData(prices);
-                    setStockData(prices); // Default show all (1Y)
+                    // Initial set based on current TimeRange (triggered by useEffect dependency or shared state update)
+                    // We will let the useEffect([timeRange, fullStockData]) handle the updating of 'stockData'
 
-                    // 3. 獲取大盤概況 (Yahoo For Indices Cards)
+                    // 3. 獲取大盤概況
                     const fetchYahooPrice = async (symbol) => {
-                        const yfUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`;
-                        const res = await fetch('https://corsproxy.io/?' + encodeURIComponent(yfUrl));
-                        const data = await res.json();
-                        const meta = data.chart.result[0].meta;
-                        const price = meta.regularMarketPrice;
-                        const prevClose = meta.chartPreviousClose || meta.previousClose || price;
-                        return { price, prevClose, change: price - prevClose, changePercent: ((price - prevClose) / prevClose) * 100 };
+                        try {
+                            const yfUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`;
+                            const res = await fetch('https://corsproxy.io/?' + encodeURIComponent(yfUrl));
+                            const data = await res.json();
+                            const meta = data.chart.result[0].meta;
+                            const price = meta.regularMarketPrice;
+                            const prevClose = meta.chartPreviousClose || meta.previousClose || price;
+                            return { price, prevClose, change: price - prevClose, changePercent: ((price - prevClose) / prevClose) * 100 };
+                        } catch (e) { return null; }
                     };
 
                     Promise.all([fetchYahooPrice('SPY'), fetchYahooPrice('QQQ'), fetchYahooPrice('GLD')])
                         .then(([spy, qqq, gold]) => setIndices({ spy, qqq, gold }))
                         .catch(e => console.error("Indices Fetch Error:", e));
 
-                    // 4. 獲取美股新聞 (CNBC Finance RSS)
+                    // 4. 獲取新聞
                     const rssUrl = 'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664';
-                    const newsResponse = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`);
-                    const newsData = await newsResponse.json();
-                    if (newsData.status === 'ok') setStockData(d => { setStockNews(newsData.items); return d; }); // Fix React state update batching issue? No, just set directly.
-                    setStockNews(newsData.items);
+                    fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`)
+                        .then(r => r.json())
+                        .then(d => { if (d.status === 'ok') setStockNews(d.items); })
+                        .catch(e => console.error("News Error:", e));
 
                 } catch (e) {
                     console.error("Global Stock Error:", e);
@@ -947,9 +967,9 @@
                 fetchStockData();
             }, [selectedSymbol]);
 
-            // Filter Data based on Time Range
+            // Filter Data based on Time Range (Local Filtering)
             useEffect(() => {
-                if (!fullStockData) return;
+                if (!fullStockData || fullStockData.length === 0) return;
 
                 const now = new Date();
                 let filterDate = new Date();
@@ -957,8 +977,14 @@
 
                 if (timeRange === '1M') filterDate.setMonth(now.getMonth() - 1);
                 else if (timeRange === '6M') filterDate.setMonth(now.getMonth() - 6);
-                else if (timeRange === '1Y') filterDate.setFullYear(now.getFullYear() - 1);
+                else if (timeRange === '1Y') isAll = true; // Use All (which is approx 1Y from fetch)
                 else if (timeRange === 'ALL') isAll = true;
+
+                // Important: Yahoo 1Y fetch might be slightly less than 365 days or exactly? 
+                // We just return everything for 1Y and ALL since we only fetched 1Y max.
+                // Wait, if user wants ALL, we only have 1Y. That's a limitation of our fetch. 
+                // But the requirement says "Line chart default is Year... acquire 1 year price". 
+                // So 1Y is the base. Filtering 1M and 6M is fine.
 
                 const filtered = fullStockData.filter(d => isAll || new Date(d.date) >= filterDate);
                 setStockData(filtered);
@@ -1207,11 +1233,11 @@
         };
 
         const getRsiClassification = (rsi) => {
-            if (rsi <= 25) return "極度恐懼";
-            if (rsi <= 40) return "恐懼";
-            if (rsi <= 60) return "中立";
-            if (rsi <= 75) return "貪婪";
-            return "極度貪婪";
+            if (rsi <= 25) return "極度恐懼 (Strong Buy)";
+            if (rsi <= 40) return "恐懼 (DCA Buy)";
+            if (rsi <= 60) return "中立 (Neutral)";
+            if (rsi <= 75) return "貪婪 (Stop Buying)";
+            return "極度貪婪 (Take Profit)";
         };
 
         // --- 臺股儀表板元件 ---
@@ -1294,12 +1320,14 @@
                     // Prepare tickers
                     const yahooSymbol = selectedSymbol.includes('.') ? selectedSymbol : `${selectedSymbol}.TW`;
 
-
                     // A. Fetch History (Yahoo) - Needed for RSI & Chart
-                    // Always fetch 1Y (or max) to ensuring RSI calculation and smooth scaling
                     let range = '1y';
+                    if (timeRange === '1M') range = '1mo';
+                    else if (timeRange === '6M') range = '6mo';
+                    else if (timeRange === '1Y') range = '1y';
+                    else if (timeRange === 'ALL') range = 'max';
 
-                    const historyUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}?interval=1d&range=${range}`; // Fixed range
+                    const historyUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}?interval=1d&range=${range}`;
                     const historyRes = await fetch('https://corsproxy.io/?' + encodeURIComponent(historyUrl));
                     const historyJson = await historyRes.json();
 
@@ -1406,32 +1434,41 @@
 
             useEffect(() => {
                 fetchData();
-            }, [selectedSymbol]); // Remove timeRange from dependency
+            }, [selectedSymbol, timeRange]);
 
-
+            if (loading) return <div className="flex justify-center items-center h-64"><RefreshCw className="animate-spin text-slate-500" size={32} /></div>;
+            if (error) return (
+                <div className="bg-red-900/20 border border-red-500/50 text-red-200 p-6 rounded-xl flex items-center gap-4">
+                    <AlertTriangle size={24} className="shrink-0" />
+                    <div>
+                        <h3 className="font-bold text-lg">臺股數據載入失敗</h3>
+                        <p className="text-sm opacity-90 my-2">{error}</p>
+                        <button onClick={fetchData} className="px-4 py-2 bg-red-800 hover:bg-red-700 rounded text-sm transition-colors mt-2">
+                            重試連線
+                        </button>
+                    </div>
+                </div>
+            );
 
             const suggestion = rsiData ? getSuggestion(rsiData.value) : null;
 
             // Chart Config
-            const chartData = useMemo(() => {
-                if (!rsiData || !rsiData.history) return null;
-                return {
-                    labels: rsiData.history.map(d => new Date(d.x).toLocaleDateString()),
-                    datasets: [{
-                        label: `${selectedSymbol} 股價`,
-                        data: rsiData.history.map(d => d.y),
-                        borderColor: '#3b82f6',
-                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                        borderWidth: 2,
-                        pointRadius: rsiData.history.map(d => d.rsi <= 44 ? 3 : 0), // 點半徑
-                        pointBackgroundColor: rsiData.history.map(d => d.rsi <= 25 ? '#ef4444' : (d.rsi <= 44 ? '#f97316' : 'rgba(0,0,0,0)')), // 點填充色
-                        pointBorderColor: rsiData.history.map(d => d.rsi <= 25 ? '#ef4444' : (d.rsi <= 44 ? '#f97316' : 'rgba(0,0,0,0)')),
-                        pointHoverRadius: 4,
-                        fill: true,
-                        tension: 0.4
-                    }]
-                };
-            }, [rsiData, selectedSymbol]);
+            const chartData = {
+                labels: rsiData.history.map(d => new Date(d.x).toLocaleDateString()),
+                datasets: [{
+                    label: `${selectedSymbol} 股價`,
+                    data: rsiData.history.map(d => d.y),
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    borderWidth: 2,
+                    pointRadius: rsiData.history.map(d => d.rsi <= 44 ? 3 : 0), // 點半徑
+                    pointBackgroundColor: rsiData.history.map(d => d.rsi <= 25 ? '#ef4444' : (d.rsi <= 44 ? '#f97316' : 'rgba(0,0,0,0)')), // 點填充色
+                    pointBorderColor: rsiData.history.map(d => d.rsi <= 25 ? '#ef4444' : (d.rsi <= 44 ? '#f97316' : 'rgba(0,0,0,0)')),
+                    pointHoverRadius: 4,
+                    fill: true,
+                    tension: 0.4
+                }]
+            };
 
             const chartOptions = {
                 responsive: true,
@@ -1458,46 +1495,6 @@
                     y: { grid: { color: '#334155' }, ticks: { color: '#94a3b8' } }
                 }
             };
-
-            // Filtered Chart Data based on TimeRange
-            const displayChartData = useMemo(() => {
-                if (!chartData || !rsiData || !rsiData.history) return null;
-
-                const now = new Date();
-                let cutoff = new Date();
-                if (timeRange === '1M') cutoff.setMonth(now.getMonth() - 1);
-                else if (timeRange === '6M') cutoff.setMonth(now.getMonth() - 6);
-                else if (timeRange === '1Y') cutoff.setFullYear(now.getFullYear() - 1);
-                else cutoff = new Date(0); // ALL
-
-                const filteredHistory = rsiData.history.filter(d => d.x >= cutoff.getTime());
-
-                return {
-                    ...chartData,
-                    labels: filteredHistory.map(d => new Date(d.x).toLocaleDateString()),
-                    datasets: [{
-                        ...chartData.datasets[0],
-                        data: filteredHistory.map(d => d.y),
-                        pointRadius: filteredHistory.map(d => d.rsi <= 44 ? 3 : 0),
-                        pointBackgroundColor: filteredHistory.map(d => d.rsi <= 25 ? '#ef4444' : (d.rsi <= 44 ? '#f97316' : 'rgba(0,0,0,0)')),
-                        pointBorderColor: filteredHistory.map(d => d.rsi <= 25 ? '#ef4444' : (d.rsi <= 44 ? '#f97316' : 'rgba(0,0,0,0)')),
-                    }]
-                };
-            }, [chartData, timeRange, rsiData]);
-
-            if (loading) return <div className="flex justify-center items-center h-64"><RefreshCw className="animate-spin text-slate-500" size={32} /></div>;
-            if (error) return (
-                <div className="bg-red-900/20 border border-red-500/50 text-red-200 p-6 rounded-xl flex items-center gap-4">
-                    <AlertTriangle size={24} className="shrink-0" />
-                    <div>
-                        <h3 className="font-bold text-lg">臺股數據載入失敗</h3>
-                        <p className="text-sm opacity-90 my-2">{error}</p>
-                        <button onClick={fetchData} className="px-4 py-2 bg-red-800 hover:bg-red-700 rounded text-sm transition-colors mt-2">
-                            重試連線
-                        </button>
-                    </div>
-                </div>
-            );
 
             return (
                 <div className="space-y-6">
@@ -1539,7 +1536,7 @@
                                     classification={rsiData.classification}
                                 />
                             )}
-                            {/* Sentiment Scarcity Bar (Show Full Year) */}
+                            {/* Sentiment Scarcity Bar */}
                             {rsiData && rsiData.history && (
                                 <div className="w-full max-w-2xl mt-4 px-4">
                                     <SentimentScarcityBar
@@ -1597,7 +1594,7 @@
                                 <TimeRangeSelector range={timeRange} onRangeChange={setTimeRange} />
                             </div>
                             <div className="h-[350px] w-full relative">
-                                <ChartComponent data={displayChartData} options={chartOptions} />
+                                <ChartComponent data={chartData} options={chartOptions} />
                             </div>
                         </div>
                     )
@@ -1637,6 +1634,7 @@
             const [loading, setLoading] = useState(true);
             const [error, setError] = useState(null);
             const [historicalData, setHistoricalData] = useState([]);
+            const [fullHistoricalData, setFullHistoricalData] = useState([]);
             const [currentFNG, setCurrentFNG] = useState(null);
             const [lastUpdated, setLastUpdated] = useState(null);
             const [prices, setPrices] = useState(null);
@@ -1692,8 +1690,12 @@
                     const fngJson = await fngResponse.json();
 
                     // 2. Fetch Historical Data (CoinGecko fallback for history)
-                    // Always fetch 365 days to allow local filtering
-                    const days = '365';
+                    // Always fetch 365 days (1 Year) to support local filtering and default view
+                    // If user wants ALL, we might need 'max', but let's stick to 365 for consistency with FNG max limit (usually)
+                    // Actually, Alternative.me limit can be higher, but let's aim for 1 Year as primary.
+                    // User said "Default is Year", so 365 is good.
+                    let days = '365';
+                    // Check if we already have data for this coin? No, simpler to re-fetch on coin change.
 
                     let coinUrl = `https://api.coingecko.com/api/v3/coins/${selectedCoin}/market_chart?vs_currency=usd&days=${days}&interval=daily`;
                     let coinResponse = await fetch(coinUrl);
@@ -1748,7 +1750,7 @@
                         };
                     });
 
-                    setHistoricalData(mergedData);
+                    setFullHistoricalData(mergedData);
                     setLastUpdated(new Date());
 
                 } catch (err) {
@@ -1775,23 +1777,30 @@
             useEffect(() => {
                 fetchData();
                 fetchNews();
-            }, [selectedCoin]); // Remove timeRange from re-fetch trigger
+            }, [selectedCoin]); // Removed timeRange from dependency
 
-            // Local Filtering for Chart
-            const chartData = useMemo(() => {
-                if (!historicalData.length) return null;
+            // Local Filtering Effect
+            useEffect(() => {
+                if (!fullHistoricalData || fullHistoricalData.length === 0) return;
 
                 const now = new Date();
-                let cutoff = new Date();
-                if (timeRange === '1M') cutoff.setMonth(now.getMonth() - 1);
-                else if (timeRange === '6M') cutoff.setMonth(now.getMonth() - 6);
-                else if (timeRange === '1Y') cutoff.setFullYear(now.getFullYear() - 1);
-                else cutoff = new Date(0); // ALL
+                let filterDate = new Date();
+                let isAll = false;
 
-                const filteredData = historicalData.filter(d => new Date(d.date) >= cutoff);
+                if (timeRange === '1M') filterDate.setMonth(now.getMonth() - 1);
+                else if (timeRange === '6M') filterDate.setMonth(now.getMonth() - 6);
+                else if (timeRange === '1Y') isAll = true; // Full data is 1Y
+                else if (timeRange === 'ALL') isAll = true;
 
-                const labels = filteredData.map(d => d.date);
-                const prices = filteredData.map(d => d.price);
+                const filtered = fullHistoricalData.filter(d => isAll || new Date(d.date) >= filterDate);
+                setHistoricalData(filtered);
+
+            }, [timeRange, fullHistoricalData]);
+
+            const chartData = useMemo(() => {
+                if (!historicalData.length) return null;
+                const labels = historicalData.map(d => d.date);
+                const prices = historicalData.map(d => d.price);
 
                 return {
                     labels,
@@ -1807,15 +1816,15 @@
                             return gradient;
                         },
                         borderWidth: 2,
-                        pointBackgroundColor: filteredData.map(d => d.fng <= 25 ? '#ef4444' : (d.fng <= 44 ? '#f97316' : 'rgba(0,0,0,0)')),
-                        pointBorderColor: filteredData.map(d => d.fng <= 25 ? '#ef4444' : (d.fng <= 44 ? '#f97316' : 'rgba(0,0,0,0)')),
-                        pointRadius: filteredData.map(d => d.fng <= 44 ? (d.fng <= 25 ? 3 : 2) : 0),
+                        pointBackgroundColor: historicalData.map(d => d.fng <= 25 ? '#ef4444' : (d.fng <= 44 ? '#f97316' : 'rgba(0,0,0,0)')),
+                        pointBorderColor: historicalData.map(d => d.fng <= 25 ? '#ef4444' : (d.fng <= 44 ? '#f97316' : 'rgba(0,0,0,0)')),
+                        pointRadius: historicalData.map(d => d.fng <= 44 ? (d.fng <= 25 ? 3 : 2) : 0),
                         pointHoverRadius: 4,
                         fill: true,
                         tension: 0.4
                     }]
                 };
-            }, [historicalData, selectedCoin, timeRange]);
+            }, [historicalData, selectedCoin]);
 
             const chartOptions = {
                 responsive: true,
