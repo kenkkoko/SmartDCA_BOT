@@ -132,7 +132,7 @@ def generate_ai_advice(market_status_list):
 
     try:
         genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel('gemini-2.5-flash-live')
+        model = genai.GenerativeModel('gemini-2.0-flash-live')
         
         prompt = f"""
         你是一位極度穩健的 DCA (平均成本法) 投資顧問。你的核心策略是嚴格遵守「在市場情緒極度恐懼時才強力買入」的紀律。
@@ -204,6 +204,12 @@ def main():
         status_icon = get_status_emoji(us_stock_fng)
         status_text = get_status_text(us_stock_fng)
         msg = f"🇺🇸 美股: {us_stock_fng} ({status_text} {status_icon})"
+        
+        # US Stock Price Stats (SPY)
+        spy_stats = fetch_price_stats("SPY")
+        if spy_stats:
+             msg += f"\n   - SPY: ${format_price(spy_stats['current'])} (1Y High: ${format_price(spy_stats['high'])}, Low: ${format_price(spy_stats['low'])})"
+
         market_status_list.append(msg)
         if us_stock_fng <= FEAR_THRESHOLD:
             has_buy_signal = True
@@ -213,6 +219,12 @@ def main():
         status_icon = get_status_emoji(tw_stock_rsi)
         status_text = get_status_text(tw_stock_rsi, is_rsi=True)
         msg = f"🇹🇼 台股(0050): {tw_stock_rsi} ({status_text} {status_icon})"
+        
+        # TW Stock Price Stats (0050.TW)
+        tw50_stats = fetch_price_stats("0050.TW")
+        if tw50_stats:
+             msg += f"\n   - 0050: ${format_price(tw50_stats['current'])} (1Y High: ${format_price(tw50_stats['high'])}, Low: ${format_price(tw50_stats['low'])})"
+
         market_status_list.append(msg)
         if tw_stock_rsi <= FEAR_THRESHOLD:
             has_buy_signal = True
