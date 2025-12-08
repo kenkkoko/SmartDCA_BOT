@@ -350,10 +350,14 @@
                 const titles = newsItems.map(n => n.title).join("\n");
                 const prompt = `
                  請閱讀以下今日財經新聞標題，並總結成一段 50 字以內的「今日市場重點」。
-                 
+
+                 **核心任務：**
+                 1. 總結**至少兩到三個**不同的市場主題 (如：宏觀經濟影響、新技術發展、主要資產價格)。
+                 2. 避免將單一資產的價格突破作為唯一的總結重點。
+
                  新聞標題:
                  ${titles}
-                 
+
                  請用繁體中文回答，語氣專業客觀。
                  `;
                 fetchGeminiAdvice(prompt).then(text => {
@@ -1233,11 +1237,11 @@
         };
 
         const getRsiClassification = (rsi) => {
-            if (rsi <= 25) return "極度恐懼 (Strong Buy)";
-            if (rsi <= 40) return "恐懼 (DCA Buy)";
-            if (rsi <= 60) return "中立 (Neutral)";
-            if (rsi <= 75) return "貪婪 (Stop Buying)";
-            return "極度貪婪 (Take Profit)";
+            if (rsi <= 25) return "極度恐懼";
+            if (rsi <= 40) return "恐懼";
+            if (rsi <= 60) return "中立";
+            if (rsi <= 75) return "貪婪";
+            return "極度貪婪";
         };
 
         // --- 臺股儀表板元件 ---
