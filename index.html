@@ -11,19 +11,9 @@
     <link rel="icon" type="image/png" href="./app-icon.png" />
 
 
+        <!-- 引入 Tailwind CSS -->
        
     <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    screens: {
-                        'xs': '400px',
-                    }
-                }
-            }
-        }
-    </script>
 
         <!-- 引入 React 和 ReactDOM -->
        
@@ -213,7 +203,6 @@
         // API Key Placeholder for GitHub Actions Injection
         // API Key Placeholder for GitHub Actions Injection
         const GEMINI_API_KEY = '__GEMINI_API_KEY_PLACEHOLDER__';
-        const CMC_PRO_API_KEY = '__CMC_PRO_API_KEY_PLACEHOLDER__';
 
         // Helper: Format Price (8 decimals for < 1, 2 for >= 1)
         const formatPrice = (price) => {
@@ -224,13 +213,18 @@
 
         // --- Gemini API Helper ---
         const fetchGeminiAdvice = async (prompt) => {
-            // Fix: Use .includes('PLACEHOLDER') to avoid sed replacing the check string
-            if (!GEMINI_API_KEY || GEMINI_API_KEY.includes('PLACEHOLDER')) {
+            // Check for key in window object (for user injection) or environment variable placeholder
+            let apiKey = GEMINI_API_KEY;
+            if (typeof window !== 'undefined' && window.GEMINI_API_KEY && !window.GEMINI_API_KEY.includes('PLACEHOLDER')) {
+                apiKey = window.GEMINI_API_KEY;
+            }
+
+            if (!apiKey || apiKey.includes('PLACEHOLDER')) {
                 console.error("Gemini API Key is missing or invalid.");
-                return `⚠️ AI 建議無法產生 (Key Status: ${GEMINI_API_KEY.includes('PLACEHOLDER') ? 'Placeholder' : 'Missing'})`;
+                return `⚠️ AI 暫時無法提供建議 (未設定 API Key)。請在 Actions Secrets 設定，或在 Console 輸入 window.GEMINI_API_KEY='你的KEY'`;
             }
             try {
-                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
                 const response = await fetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -814,16 +808,20 @@
             );
         };
 
+
+        // --- API Keys ---
+        const CMC_API_KEY = '__CMC_API_KEY__';
+
         // --- 美股儀表板元件 ---
         const StockDashboard = ({ notificationsEnabled, toggleNotifications }) => {
-            const [selectedSymbol, setSelectedSymbol] = useState('SPY'); // Default symbol
-            const [timeRange, setTimeRange] = useState('1Y'); // Time range state
-            const [stockData, setStockData] = useState(null); // Price history for selected symbol
-            const [fullStockData, setFullStockData] = useState(null); // Store full data for filtering
+            const [selectedSymbol, setSelectedSymbol] = useState('SPY');
+            const [timeRange, setTimeRange] = useState('1Y');
+            const [stockData, setStockData] = useState(null);
+            const [fullStockData, setFullStockData] = useState(null);
             const [fngData, setFngData] = useState(null);
-            const [fngHistory, setFngHistory] = useState([]); // Store historical data
+            const [fngHistory, setFngHistory] = useState([]);
             const [stockNews, setStockNews] = useState([]);
-            const [indices, setIndices] = useState({ spy: null, qqq: null, gold: null }); // Store SPY, QQQ, Gold data
+            const [indices, setIndices] = useState({ spy: null, qqq: null, gold: null });
             const [loading, setLoading] = useState(true);
             const [error, setError] = useState(null);
 
@@ -841,18 +839,12 @@
                         if (!fngResponse.ok) throw new Error('無法獲取 CNN 數據');
                         const fngJson = await fngResponse.json();
 
-                        let score = 50;
-                        let rating = "Neutral";
-                        let lastUpdated = new Date().toISOString();
-
                         if (fngJson.fear_and_greed) {
-                            score = Math.round(fngJson.fear_and_greed.score);
-                            rating = fngJson.fear_and_greed.rating;
-                            lastUpdated = fngJson.fear_and_greed.timestamp;
-
+                            let score = Math.round(fngJson.fear_and_greed.score);
+                            let rating = fngJson.fear_and_greed.rating;
+                            let lastUpdated = fngJson.fear_and_greed.timestamp;
                             const ratingMap = { "Extreme Fear": "極度恐懼", "extreme fear": "極度恐懼", "Fear": "恐懼", "fear": "恐懼", "Neutral": "中立", "neutral": "中立", "Greed": "貪婪", "greed": "貪婪", "Extreme Greed": "極度貪婪", "extreme greed": "極度貪婪" };
                             rating = ratingMap[rating] || rating;
-
                             setFngData({ value: score, classification: rating, lastUpdated: lastUpdated });
                         }
 
@@ -869,48 +861,42 @@
                         console.error("FNG Fetch Error:", e);
                     }
 
+                    // 2. 獲取美股歷史數據 (Switch to Yahoo Finance for robustness & 1Y data)
+                    // Alpha Vantage (AV) has strict rate limits causing "straight line" / no data issues.
+                    // Yahoo Finance via Proxy is more reliable for client-side historical data.
+                    const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${selectedSymbol}?interval=1d&range=1y`;
+                    const historyRes = await fetch('https://corsproxy.io/?' + encodeURIComponent(yahooUrl));
 
-                    // 2. 獲取 Yahoo Finance 股價數據 (Using Proxy)
-                    let range = '1y';
-                    if (timeRange === '1M') range = '1mo';
-                    else if (timeRange === '6M') range = '6mo';
-                    else if (timeRange === '1Y') range = '1y';
-                    else if (timeRange === 'ALL') range = '5y'; // Yahoo Max
+                    if (!historyRes.ok) throw new Error("Yahoo Finance API Error");
+                    const historyJson = await historyRes.json();
 
-                    const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${selectedSymbol}?interval=1d&range=${range}`;
-                    const chartRes = await fetch('https://corsproxy.io/?' + encodeURIComponent(yahooUrl));
-
-                    let prices = [];
-                    try {
-                        if (!chartRes.ok) throw new Error("Yahoo Finance Chart API Error");
-                        const chartJson = await chartRes.json();
-
-                        if (!chartJson.chart || !chartJson.chart.result) throw new Error("無法獲取股價數據 (無效代號?)");
-
-                        const result = chartJson.chart.result[0];
-                        const timestamps = result.timestamp;
-                        const closes = result.indicators.quote[0].close;
-
-                        prices = timestamps.map((ts, i) => {
-                            if (!closes[i]) return null;
-                            const date = new Date(ts * 1000).toISOString().split('T')[0];
-                            const fng = fngMap.get(date) || 50;
-                            return {
-                                date: date,
-                                price: closes[i],
-                                fng: fng,
-                                classification: 'N/A' // Optional
-                            };
-                        }).filter(p => p !== null);
-
-                        setStockData(prices);
-                        setFullStockData(prices); // Ensure we have data
-                    } catch (e) {
-                        console.error("Stock Data Error:", e);
-                        setError(`無法獲取 ${selectedSymbol} 股價: ${e.message}`);
+                    if (!historyJson.chart || !historyJson.chart.result || historyJson.chart.result.length === 0) {
+                        throw new Error("查無此股票代號或無數據");
                     }
 
-                    // 3. 獲取大盤概況 (Yahoo For Indices Cards - 保持不變以節省 AV Quota)
+                    const result = historyJson.chart.result[0];
+                    const timestamps = result.timestamp;
+                    const closeQuotes = result.indicators.quote[0].close;
+
+                    if (!timestamps || !closeQuotes) throw new Error("數據格式錯誤");
+
+                    const prices = timestamps.map((t, i) => {
+                        const price = closeQuotes[i];
+                        if (price === null || price === undefined) return null;
+                        const date = new Date(t * 1000).toISOString().split('T')[0];
+                        return {
+                            date: date,
+                            price: price,
+                            fng: fngMap.get(date) || 50 // Default to 50 (Neutral) if FNG missing for that day
+                        };
+                    }).filter(item => item !== null).sort((a, b) => new Date(a.date) - new Date(b.date));
+
+                    if (prices.length === 0) throw new Error("無有效股價數據");
+
+                    setFullStockData(prices);
+                    setStockData(prices); // Default show all (1Y)
+
+                    // 3. 獲取大盤概況 (Yahoo For Indices Cards)
                     const fetchYahooPrice = async (symbol) => {
                         const yfUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`;
                         const res = await fetch('https://corsproxy.io/?' + encodeURIComponent(yfUrl));
@@ -921,7 +907,6 @@
                         return { price, prevClose, change: price - prevClose, changePercent: ((price - prevClose) / prevClose) * 100 };
                     };
 
-                    // Parallel fetch indices
                     Promise.all([fetchYahooPrice('SPY'), fetchYahooPrice('QQQ'), fetchYahooPrice('GLD')])
                         .then(([spy, qqq, gold]) => setIndices({ spy, qqq, gold }))
                         .catch(e => console.error("Indices Fetch Error:", e));
@@ -943,7 +928,7 @@
 
             useEffect(() => {
                 fetchStockData();
-            }, [selectedSymbol, timeRange]); // Refetch when symbol OR timeRange changes (since we fetch strictly by range now for Yahoo)
+            }, [selectedSymbol]);
 
             // Filter Data based on Time Range
             useEffect(() => {
@@ -951,25 +936,15 @@
 
                 const now = new Date();
                 let filterDate = new Date();
+                let isAll = false;
 
                 if (timeRange === '1M') filterDate.setMonth(now.getMonth() - 1);
                 else if (timeRange === '6M') filterDate.setMonth(now.getMonth() - 6);
                 else if (timeRange === '1Y') filterDate.setFullYear(now.getFullYear() - 1);
-                else if (timeRange === 'ALL') filterDate = new Date(0); // All time
+                else if (timeRange === 'ALL') isAll = true;
 
-                const filtered = fullStockData.filter(d => new Date(d.date) >= filterDate);
+                const filtered = fullStockData.filter(d => isAll || new Date(d.date) >= filterDate);
                 setStockData(filtered);
-                // Client-side filtering is no longer primary, as we fetch by range. 
-                // However, we can keep this for "ALL" to sub-filter if we fetched max? 
-                // For now, let's rely on server fetch.
-                /*
-                if (!fullStockData) return;
-                const now = new Date();
-                let filterDate = new Date();
-                if (timeRange === '1M') filterDate.setMonth(now.getMonth() - 1);
-                ...
-                setStockData(filtered);
-                */
             }, [timeRange, fullStockData]);
 
             const getSuggestion = (score) => {
@@ -1015,7 +990,6 @@
                     text: "text-blue-400"
                 };
             };
-
             const suggestion = fngData ? getSuggestion(fngData.value) : null;
 
             // Stock Price vs FNG Chart (Mixed Chart)
@@ -1028,7 +1002,7 @@
                         {
                             label: `${symbol} 價格`,
                             data: data.map(d => d.price),
-                            borderColor: '#3b82f6', // Blue Line for Price
+                            borderColor: '#3b82f6',
                             backgroundColor: (context) => {
                                 const ctx = context.chart.ctx;
                                 const gradient = ctx.createLinearGradient(0, 0, 0, 400);
@@ -1040,11 +1014,10 @@
                             borderWidth: 2,
                             fill: true,
                             tension: 0.4,
-                            // Dots colored by FNG
                             pointBackgroundColor: data.map(d => {
-                                if (d.fng <= 25) return '#ef4444'; // Extreme Fear
-                                if (d.fng <= 44) return '#f97316'; // Fear
-                                return 'rgba(0,0,0,0)'; // Hide neutral/greed dots
+                                if (d.fng <= 25) return '#ef4444';
+                                if (d.fng <= 44) return '#f97316';
+                                return 'rgba(0,0,0,0)';
                             }),
                             pointBorderColor: data.map(d => {
                                 if (d.fng <= 25) return '#ef4444';
@@ -1075,7 +1048,7 @@
                                     return [
                                         `價格: $${d.price.toLocaleString()}`,
                                         `市場 FNG: ${d.fng}`,
-                                        d.fng <= 40 ? '🔴 建議 DCA 買入點 (Market Fear)' : '⚪ 觀望'
+                                        d.fng <= 40 ? '🔴 建議 DCA 買入點' : '⚪ 觀望'
                                     ];
                                 }
                             }
@@ -1083,116 +1056,61 @@
                         title: { display: true, text: `${symbol} 價格走勢與市場恐懼指數 (紅/橘點代表市場恐懼)`, color: '#94a3b8' }
                     },
                     scales: {
-                        y: {
-                            type: 'linear',
-                            display: true,
-                            position: 'left',
-                            grid: { color: '#334155' },
-                            ticks: { color: '#94a3b8' }
-                        },
-                        x: {
-                            ticks: { color: '#94a3b8', maxTicksLimit: 8 },
-                            grid: { display: false }
-                        }
+                        y: { type: 'linear', display: true, position: 'left', grid: { color: '#334155' }, ticks: { color: '#94a3b8' } },
+                        x: { ticks: { color: '#94a3b8', maxTicksLimit: 8 }, grid: { display: false } }
                     }
                 };
-
                 return <ChartComponent data={chartData} options={options} />;
             };
 
             return (
                 <div className="space-y-6">
-                    {/* 大盤指數卡片 */}
                     <SymbolSearch symbol={selectedSymbol} onSearch={setSelectedSymbol} />
-
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <IndexPriceCard
-                            name="S&P 500 ETF"
-                            symbol="SPY"
-                            data={indices.spy}
-                            suggestion={suggestion}
-                        />
-                        <IndexPriceCard
-                            name="NASDAQ 100 ETF"
-                            symbol="QQQ"
-                            data={indices.qqq}
-                            suggestion={suggestion}
-                        />
-                        <IndexPriceCard
-                            name="Gold ETF"
-                            symbol="GLD"
-                            data={indices.gold}
-                            suggestion={suggestion}
-                        />
+                        <IndexPriceCard name="S&P 500 ETF" symbol="SPY" data={indices.spy} suggestion={suggestion} />
+                        <IndexPriceCard name="NASDAQ 100 ETF" symbol="QQQ" data={indices.qqq} suggestion={suggestion} />
+                        <IndexPriceCard name="Gold ETF" symbol="GLD" data={indices.gold} suggestion={suggestion} />
                     </div>
 
-                    {/* 標題區 */}
                     <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl flex flex-col items-center text-center">
                         <h2 className="text-xl font-bold text-slate-200 mb-2">美股恐懼與貪婪指數</h2>
-
                         {loading ? (
-                            <RefreshCw className="animate-spin text-slate-500" size={32} />
+                            <div className="py-12"><RefreshCw className="animate-spin text-slate-500" size={32} /></div>
                         ) : error ? (
-                            <div className="flex flex-col items-center gap-2">
+                            <div className="flex flex-col items-center gap-2 py-8">
                                 <AlertTriangle className="text-red-400" size={32} />
                                 <div className="text-red-400">{error}</div>
                                 <button onClick={fetchStockData} className="mt-2 px-4 py-1 bg-slate-800 rounded text-sm hover:bg-slate-700">重試</button>
                             </div>
                         ) : (
                             <div className="w-full flex flex-col items-center">
-                                {fngData && (
-                                    <FearGreedGauge
-                                        fngValue={fngData.value}
-                                        classification={fngData.classification}
-                                    />
-                                )}
-
-                                {/* Sentiment Scarcity Bar */}
+                                {fngData && <FearGreedGauge fngValue={fngData.value} classification={fngData.classification} />}
                                 {fngHistory && fngHistory.length > 0 && (
                                     <div className="w-full max-w-2xl mt-4 px-4">
-                                        <SentimentScarcityBar
-                                            data={fngHistory.map(d => d.y)}
-                                            title="過去 365 天美股買入機會分佈"
-                                        />
+                                        <SentimentScarcityBar data={fngHistory.map(d => d.y)} title="過去 365 天美股買入機會分佈" />
                                     </div>
                                 )}
                             </div>
                         )}
                     </div>
 
-                    {/* 策略建議區 */}
                     {suggestion && (
                         <div className={`p-6 rounded-2xl border ${suggestion.border} ${suggestion.bg} relative overflow-hidden transition-all duration-500`}>
                             <div className="relative z-10 flex flex-col md:flex-row justify-between items-center w-full max-w-lg mx-auto mt-0">
                                 <div className="flex flex-col items-start text-left mb-4 md:mb-0">
                                     <div className="text-sm uppercase tracking-wider opacity-70 mb-1">DCA 策略建議</div>
-                                    <span className={`text-2xl font-bold ${suggestion.text}`}>
-                                        {suggestion.title}
-                                    </span>
-                                    <p className="mt-2 text-slate-300 max-w-lg text-sm">
-                                        {suggestion.desc}
-                                    </p>
+                                    <span className={`text-2xl font-bold ${suggestion.text}`}>{suggestion.title}</span>
+                                    <p className="mt-2 text-slate-300 max-w-lg text-sm">{suggestion.desc}</p>
                                 </div>
                                 <div className="flex flex-col items-center md:items-end gap-2 min-w-[140px] text-center md:text-right">
                                     <div className="text-sm text-slate-400">當前操作</div>
-                                    <div className={`text-xl font-bold ${suggestion.text} border-2 border-current px-4 py-1 rounded-lg whitespace-nowrap`}>
-                                        {suggestion.action}
-                                    </div>
+                                    <div className={`text-xl font-bold ${suggestion.text} border-2 border-current px-4 py-1 rounded-lg whitespace-nowrap`}>{suggestion.action}</div>
                                 </div>
                             </div>
-                            {/* AI Advice Integration */}
                             {fngData && (
                                 <AIAdviceBlock
                                     assetName={`美股 (${selectedSymbol})`}
-                                    marketData={`
-                                        資產: ${selectedSymbol}
-                                        恐懼貪婪指數: ${fngData.value} (${fngData.classification})
-                                        ${stockData && stockData.length > 0 ? `
-                                        當前價格: $${stockData[stockData.length - 1].price}
-                                        近一年最高: $${Math.max(...stockData.map(d => d.price))}
-                                        近一年最低: $${Math.min(...stockData.map(d => d.price))}
-                                        ` : ''}
-                                    `}
+                                    marketData={`資產: ${selectedSymbol}\n恐懼貪婪指數: ${fngData.value} (${fngData.classification})`}
                                     priceStats={stockData && stockData.length > 0 ? {
                                         current: stockData[stockData.length - 1].price,
                                         high: Math.max(...stockData.map(d => d.price)),
@@ -1203,7 +1121,6 @@
                         </div>
                     )}
 
-                    {/* 歷史走勢圖 */}
                     {!loading && !error && stockData && stockData.length > 0 && (
                         <div className="bg-slate-900 p-4 rounded-2xl border border-slate-800 shadow-xl">
                             <div className="flex justify-between items-center mb-4">
@@ -1213,31 +1130,26 @@
                                 </h2>
                                 <TimeRangeSelector range={timeRange} onRangeChange={setTimeRange} />
                             </div>
-                            <div className="h-[350px] w-full relative">
+                            <div className="h-[300px] sm:h-[350px] w-full relative">
                                 <StockFNGChart data={stockData} symbol={selectedSymbol} />
                             </div>
                         </div>
                     )}
 
-                    {/* 美股新聞區 */}
                     <div className="mt-8">
                         <div className="flex items-center gap-2 mb-6">
                             <Newspaper className="text-blue-500" />
                             <h2 className="text-xl font-bold text-slate-200">美股財經頭條 (CNBC)</h2>
                         </div>
-
-                        {/* 今日市場快訊 (Highlights) */}
                         {!loading && !error && stockNews.length > 0 && (
                             <>
                                 <NewsAIAnalysis newsItems={stockNews} />
                                 <NewsSummary news={stockNews} />
                             </>
                         )}
-
                         <NewsSection news={stockNews} loading={loading} error={error} />
                     </div>
 
-                    {/* 資料來源 (移至底部) */}
                     <div className="text-center text-slate-600 text-xs mt-8 pb-4">
                         資料來源: CNN Business, Yahoo Finance, CNBC
                     </div>
@@ -1671,165 +1583,134 @@
 
 
 
-        // --- 加密貨幣儀表板 (原 App 內容) ---
+
+        // --- 加密貨幣儀表板 (Updated to use CoinMarketCap) ---
         const CryptoDashboard = ({ notificationsEnabled, toggleNotifications }) => {
-            const [selectedCoin, setSelectedCoin] = useState('BTC-USD'); // Default to Yahoo Symbol
-            const [timeRange, setTimeRange] = useState('1Y'); // Time range state
+            const [selectedCoin, setSelectedCoin] = useState('bitcoin'); // slug or id
+            const [timeRange, setTimeRange] = useState('1Y');
             const [loading, setLoading] = useState(true);
             const [error, setError] = useState(null);
             const [historicalData, setHistoricalData] = useState([]);
             const [currentFNG, setCurrentFNG] = useState(null);
-            const [lastUpdated, setLastUpdated] = useState(null); // Moved from App
+            const [lastUpdated, setLastUpdated] = useState(null);
             const [prices, setPrices] = useState(null);
-
-            // News State
             const [newsData, setNewsData] = useState([]);
             const [newsLoading, setNewsLoading] = useState(true);
             const [newsError, setNewsError] = useState(null);
 
-            const sendTestNotification = () => {
-                new Notification("通知已啟用 ✅", {
-                    body: "Smart DCA Bot 已準備好！當恐懼指數達到買入區間時，我們會立即通知您。",
-                    icon: "https://cryptologos.cc/logos/bitcoin-btc-logo.png"
-                });
-            };
-
-            const triggerBuySignalNotification = (fngValue, coinName) => {
-                // 只有在開關開啟 (notificationsEnabled 為 true) 時才發送
-                if (notificationsEnabled && Notification.permission === 'granted') {
-                    let intensity = "少量 DCA";
-                    if (fngValue <= 25) intensity = "極度恐懼！建議強力買入";
-                    else if (fngValue <= 45) intensity = "恐懼階段，建議加碼";
-
-                    new Notification(`DCA 訊號觸發: ${coinName.toUpperCase()}`, {
-                        body: `今日恐懼指數為 ${fngValue}。建議操作：${intensity}`,
-                        icon: coinName.includes('BTC')
-                            ? "https://cryptologos.cc/logos/bitcoin-btc-logo.png"
-                            : "https://cryptologos.cc/logos/ethereum-eth-logo.png"
-                    });
-                }
-            };
-
-            const fetchCurrentPrices = async () => {
+            // Fetch Current Price from CoinMarketCap (CMC)
+            const fetchCurrentPrices = async (slugs = ['bitcoin', 'ethereum']) => {
                 try {
-                    // CoinMarketCap API via CORS Proxy
-                    // CMC ID Map: BTC=1, ETH=1027, SOL=5426 (We can search or hardcode for now)
-                    // For simplicity in this demo, we fetch a batch of top coins.
-                    // Note: CMC requires a server-side proxy usually to hide key, but for this client-side demo we use the injection.
+                    // Use CORS Proxy to call CMC
+                    const proxy = 'https://corsproxy.io/?url=';
+                    const targetUrl = encodeURIComponent(`https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest?slug=${slugs.join(',')}&CMC_PRO_API_KEY=${CMC_API_KEY}`);
 
-                    const cmcKey = CMC_PRO_API_KEY;
-                    if (!cmcKey || cmcKey.includes('PLACEHOLDER')) {
-                        console.warn("CMC Key not found, skipping price update");
-                        return;
-                    }
-
-                    const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(`https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest?symbol=BTC,ETH,SOL,BNB,XRP,DOGE,ADA,AVAX`);
-
-                    const response = await fetch(proxyUrl, {
+                    const response = await fetch(`${proxy}${targetUrl}`, {
                         headers: {
-                            'X-CMC_PRO_API_KEY': cmcKey
+                            'X-CMC_PRO_API_KEY': CMC_API_KEY
                         }
                     });
 
                     if (response.ok) {
                         const data = await response.json();
-                        // Transform to map: { 'BTC-USD': { usd: 123, ... } }
-                        // Our internal ID is using Yahoo tickers like 'BTC-USD'
-                        const priceMap = {};
+                        // CMC Structure: { data: { "1": { ... }, "1027": { ... } } }
+                        const newPrices = {};
                         Object.values(data.data).forEach(coin => {
-                            // Map Symbol to Yahoo Ticker
-                            priceMap[`${coin.symbol}-USD`] = {
+                            newPrices[coin.slug] = {
                                 usd: coin.quote.USD.price,
                                 usd_24h_change: coin.quote.USD.percent_change_24h,
                                 symbol: coin.symbol
                             };
                         });
-                        setPrices(priceMap);
+                        setPrices(newPrices);
+                    } else {
+                        console.warn('CMC Price Fetch Failed:', await response.text());
                     }
                 } catch (e) {
-                    console.warn("CMC Price Fetch Failed:", e);
+                    console.warn("CMC Price Fetch Error:", e);
                 }
             };
 
             const fetchData = async () => {
                 setLoading(true);
                 setError(null);
-                fetchCurrentPrices();
+
+                // Fetch Prices first
+                const slugs = ['bitcoin', 'ethereum'];
+                if (!slugs.includes(selectedCoin)) slugs.push(selectedCoin);
+                fetchCurrentPrices(slugs);
 
                 try {
-                    const fetchWithTimeout = (url, timeout = 10000) => {
-                        return Promise.race([
-                            fetch(url),
-                            new Promise((_, reject) =>
-                                setTimeout(() => reject(new Error('API 請求逾時 (Timeout)，請檢查網路或稍後再試')), timeout)
-                            )
-                        ]);
-                    };
-
-                    const fngResponse = await fetchWithTimeout('https://api.alternative.me/fng/?limit=365');
-                    if (!fngResponse.ok) {
-                        throw new Error(`FNG API Error: ${fngResponse.status}`);
-                    }
+                    // 1. Fetch FNG (Alternative.me)
+                    const fngResponse = await fetch('https://api.alternative.me/fng/?limit=365');
                     const fngJson = await fngResponse.json();
 
-                    // Yahoo Finance History
-                    // Helper to get range
-                    let range = '1y';
-                    if (timeRange === '1M') range = '1mo';
-                    else if (timeRange === '6M') range = '6mo';
-                    else if (timeRange === '1Y') range = '1y';
-                    else if (timeRange === 'ALL') range = '5y'; // Yahoo Max might be too big
+                    // 2. Fetch Historical Data (CoinGecko fallback for history)
+                    let days = '365';
+                    if (timeRange === '1M') days = '30';
+                    else if (timeRange === '6M') days = '180';
+                    else if (timeRange === '1Y') days = '365';
+                    else if (timeRange === 'ALL') days = 'max';
 
-                    const chartSymbol = selectedCoin; // e.g. BTC-USD
-                    const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${chartSymbol}?interval=1d&range=${range}`;
-                    const chartRes = await fetch('https://corsproxy.io/?' + encodeURIComponent(yahooUrl));
+                    let coinUrl = `https://api.coingecko.com/api/v3/coins/${selectedCoin}/market_chart?vs_currency=usd&days=${days}&interval=daily`;
+                    let coinResponse = await fetch(coinUrl);
 
-                    if (!chartRes.ok) throw new Error("Yahoo Finance Chart API Error");
-                    const chartJson = await chartRes.json();
+                    if (coinResponse.status === 404) {
+                        try {
+                            const searchRes = await fetch(`https://api.coingecko.com/api/v3/search?query=${selectedCoin}`);
+                            const searchData = await searchRes.json();
+                            if (searchData.coins && searchData.coins.length > 0) {
+                                setSelectedCoin(searchData.coins[0].id);
+                                return;
+                            }
+                        } catch (e) { }
+                    }
 
-                    if (!chartJson.chart || !chartJson.chart.result) throw new Error("無效的加密貨幣代號");
+                    if (!coinResponse.ok) throw new Error("CoinGecko API Error (Historical Data)");
+                    const coinJson = await coinResponse.json();
 
-                    const timestamps = chartJson.chart.result[0].timestamp;
-                    const quotes = chartJson.chart.result[0].indicators.quote[0];
-                    const closes = quotes.close;
-
+                    // Process FNG
                     const fngMap = new Map();
                     fngJson.data.forEach(item => {
                         const date = new Date(item.timestamp * 1000).toISOString().split('T')[0];
-                        // 翻譯評級 (Same as before)
                         let rating = item.value_classification;
-                        const ratingMap = { "Extreme Fear": "極度恐懼", "extreme fear": "極度恐懼", "Fear": "恐懼", "fear": "恐懼", "Neutral": "中立", "neutral": "中立", "Greed": "貪婪", "greed": "貪婪", "Extreme Greed": "極度貪婪", "extreme greed": "極度貪婪" };
+                        const ratingMap = {
+                            "Extreme Fear": "極度恐懼", "extreme fear": "極度恐懼",
+                            "Fear": "恐懼", "fear": "恐懼",
+                            "Neutral": "中立", "neutral": "中立",
+                            "Greed": "貪婪", "greed": "貪婪",
+                            "Extreme Greed": "極度貪婪", "extreme greed": "極度貪婪"
+                        };
                         rating = ratingMap[rating] || rating;
                         fngMap.set(date, { value: parseInt(item.value), classification: rating });
                     });
 
-                    // Update Current FNG
+                    // Set Current FNG
                     const currentItem = fngJson.data[0];
                     let currentRating = currentItem.value_classification;
                     const ratingMap = { "Extreme Fear": "極度恐懼", "extreme fear": "極度恐懼", "Fear": "恐懼", "fear": "恐懼", "Neutral": "中立", "neutral": "中立", "Greed": "貪婪", "greed": "貪婪", "Extreme Greed": "極度貪婪", "extreme greed": "極度貪婪" };
-                    currentRating = ratingMap[currentRating] || currentRating;
-                    setCurrentFNG({ ...currentItem, value_classification: currentRating });
+                    setCurrentFNG({ ...currentItem, value_classification: ratingMap[currentRating] || currentRating });
 
-                    // Merge Data
-                    const mergedData = timestamps.map((ts, i) => {
-                        if (!closes[i]) return null;
-                        const dateObj = new Date(ts * 1000);
+                    // Merge
+                    const mergedData = coinJson.prices.map(([timestamp, price]) => {
+                        const dateObj = new Date(timestamp);
                         const dateStr = dateObj.toISOString().split('T')[0];
-                        const fngData = fngMap.get(dateStr) || { value: 50, classification: 'Neutral' };
+                        const fng = fngMap.get(dateStr) || { value: 50, classification: 'Neutral' };
                         return {
                             date: dateStr,
-                            price: closes[i],
-                            fng: fngData.value,
-                            classification: fngData.classification
+                            timestamp,
+                            price,
+                            fng: fng.value,
+                            classification: fng.classification
                         };
-                    }).filter(d => d !== null);
+                    });
 
                     setHistoricalData(mergedData);
                     setLastUpdated(new Date());
 
                 } catch (err) {
-                    console.error("Data fetch failed:", err);
-                    setError(err.message);
+                    console.error("Fetch Data Failed:", err);
+                    setError(err.message + " (可能需等待由API限制)");
                 } finally {
                     setLoading(false);
                 }
@@ -1838,18 +1719,10 @@
             const fetchNews = async () => {
                 setNewsLoading(true);
                 try {
-                    // Search news for selected coin if not btc/eth? Or just use general crypto news
-                    // Using BlockTempo RSS which is general crypto.
                     const response = await fetch('https://api.rss2json.com/v1/api.json?rss_url=https://www.blocktempo.com/feed/');
-                    if (!response.ok) throw new Error('News fetch failed');
                     const data = await response.json();
-                    if (data.status === 'ok') {
-                        setNewsData(data.items);
-                    } else {
-                        throw new Error('RSS parsing failed');
-                    }
+                    if (data.status === 'ok') setNewsData(data.items);
                 } catch (e) {
-                    console.error("News error:", e);
                     setNewsError(e.message);
                 } finally {
                     setNewsLoading(false);
@@ -1859,46 +1732,34 @@
             useEffect(() => {
                 fetchData();
                 fetchNews();
-            }, [selectedCoin, notificationsEnabled, timeRange]);
+            }, [selectedCoin, timeRange]);
 
             const chartData = useMemo(() => {
                 if (!historicalData.length) return null;
                 const labels = historicalData.map(d => d.date);
                 const prices = historicalData.map(d => d.price);
-                const pointColors = historicalData.map(d => {
-                    if (d.fng <= 25) return '#ef4444';
-                    if (d.fng <= 44) return '#f97316';
-                    return 'rgba(0,0,0,0)';
-                });
-                const pointRadiuses = historicalData.map(d => {
-                    if (d.fng <= 25) return 2; // Mobile optimized radius
-                    if (d.fng <= 44) return 1.5;
-                    return 0;
-                });
 
                 return {
                     labels,
-                    datasets: [
-                        {
-                            label: `${selectedCoin.toUpperCase()} 價格 (USD)`,
-                            data: prices,
-                            borderColor: '#3b82f6',
-                            backgroundColor: (context) => {
-                                const ctx = context.chart.ctx;
-                                const gradient = ctx.createLinearGradient(0, 0, 0, 400);
-                                gradient.addColorStop(0, 'rgba(59, 130, 246, 0.5)');
-                                gradient.addColorStop(1, 'rgba(59, 130, 246, 0.0)');
-                                return gradient;
-                            },
-                            borderWidth: 2,
-                            pointBackgroundColor: pointColors,
-                            pointBorderColor: pointColors,
-                            pointRadius: pointRadiuses,
-                            pointHoverRadius: 4,
-                            fill: true,
-                            tension: 0.4
-                        }
-                    ]
+                    datasets: [{
+                        label: `${selectedCoin.toUpperCase()} 價格 (USD)`,
+                        data: prices,
+                        borderColor: '#3b82f6',
+                        backgroundColor: (context) => {
+                            const ctx = context.chart.ctx;
+                            const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+                            gradient.addColorStop(0, 'rgba(59, 130, 246, 0.5)');
+                            gradient.addColorStop(1, 'rgba(59, 130, 246, 0.0)');
+                            return gradient;
+                        },
+                        borderWidth: 2,
+                        pointBackgroundColor: historicalData.map(d => d.fng <= 25 ? '#ef4444' : (d.fng <= 44 ? '#f97316' : 'rgba(0,0,0,0)')),
+                        pointBorderColor: historicalData.map(d => d.fng <= 25 ? '#ef4444' : (d.fng <= 44 ? '#f97316' : 'rgba(0,0,0,0)')),
+                        pointRadius: historicalData.map(d => d.fng <= 44 ? (d.fng <= 25 ? 3 : 2) : 0),
+                        pointHoverRadius: 4,
+                        fill: true,
+                        tension: 0.4
+                    }]
                 };
             }, [historicalData, selectedCoin]);
 
@@ -1910,19 +1771,11 @@
                     legend: { display: false },
                     tooltip: {
                         backgroundColor: 'rgba(17, 24, 39, 0.9)',
-                        titleColor: '#fff',
-                        bodyColor: '#e5e7eb',
-                        borderColor: '#374151',
-                        borderWidth: 1,
                         callbacks: {
                             label: (context) => {
                                 const index = context.dataIndex;
                                 const data = historicalData[index];
-                                return [
-                                    `價格: $${formatPrice(data.price)}`,
-                                    `恐懼貪婪指數: ${data.fng} (${data.classification})`,
-                                    data.fng <= 40 ? '🔴 建議 DCA 買入點' : '⚪ 觀望/持有'
-                                ];
+                                return [`價格: $${formatPrice(data.price)}`, `恐懼貪婪指數: ${data.fng} (${data.classification})`, data.fng <= 40 ? '🔴 建議 DCA 買入點' : '⚪ 觀望'];
                             }
                         }
                     },
@@ -1937,303 +1790,94 @@
             const getSuggestion = () => {
                 if (!currentFNG) return { text: "載入中...", color: "text-gray-400" };
                 const val = parseInt(currentFNG.value);
-                if (val <= 25) return {
-                    title: "極度恐懼 (Extreme Fear)",
-                    action: "強力買入",
-                    desc: "市場極度恐慌，這是歷史上最佳的累積籌碼時機。",
-                    bg: "bg-red-900/30",
-                    border: "border-red-500",
-                    text: "text-red-400"
-                };
-                if (val >= 26 && val <= 44) return {
-                    title: "恐懼 (Fear)",
-                    action: "分批買入",
-                    desc: "市場情緒低迷，適合執行標準 DCA 策略。",
-                    bg: "bg-orange-900/30",
-                    border: "border-orange-500",
-                    text: "text-orange-400"
-                };
-                if (val >= 45 && val <= 55) return {
-                    title: "中立 (Neutral)",
-                    action: "持有觀望",
-                    desc: "市場方向不明，建議暫停大額買入，保持觀望。",
-                    bg: "bg-gray-800",
-                    border: "border-gray-600",
-                    text: "text-gray-400"
-                };
-                if (val >= 56 && val <= 74) return {
-                    title: "貪婪 (Greed)",
-                    action: "停止買入 / 考慮止盈",
-                    desc: "市場情緒過熱，風險增加，不建議此時進行 DCA。",
-                    bg: "bg-green-900/30",
-                    border: "border-green-500",
-                    text: "text-green-400"
-                };
-                return {
-                    title: `極度貪婪 (Extreme Greed)`,
-                    action: "極高風險 / 止盈",
-                    desc: "市場極度過熱，強烈建議止盈或停止所有買入操作。",
-                    bg: "bg-blue-900/30",
-                    border: "border-blue-500",
-                    text: "text-blue-400"
-                };
+                if (val <= 25) return { title: "極度恐懼 (Extreme Fear)", action: "強力買入", desc: "市場極度恐慌，這是歷史上最佳的累積籌碼時機。", bg: "bg-red-900/30", border: "border-red-500", text: "text-red-400" };
+                if (val <= 44) return { title: "恐懼 (Fear)", action: "分批買入", desc: "市場情緒低迷，適合執行標準 DCA 策略。", bg: "bg-orange-900/30", border: "border-orange-500", text: "text-orange-400" };
+                if (val <= 55) return { title: "中立 (Neutral)", action: "持有觀望", desc: "市場方向不明，建議暫停大額買入，保持觀望。", bg: "bg-gray-800", border: "border-gray-600", text: "text-gray-400" };
+                if (val <= 74) return { title: "貪婪 (Greed)", action: "停止買入", desc: "市場情緒過熱，風險增加，不建議此時進行 DCA。", bg: "bg-green-900/30", border: "border-green-500", text: "text-green-400" };
+                return { title: `極度貪婪 (Extreme Greed)`, action: "止盈/減倉", desc: "市場極度過熱，強烈建議止盈或停止所有買入操作。", bg: "bg-blue-900/30", border: "border-blue-500", text: "text-blue-400" };
             };
-
             const suggestion = getSuggestion();
-
-            const PriceCard = ({ id, name, symbol, iconUrl, selectedCoin, setSelectedCoin, prices }) => {
-                const isSelected = selectedCoin === id;
-                const priceData = prices ? prices[id] : null;
-                const price = priceData ? priceData.usd : null;
-                const change = priceData ? priceData.usd_24h_change : null;
-                const isPositive = change >= 0;
-
-                // Simple icon fallback if no url
-                const Icon = iconUrl ? <img src={iconUrl} alt={name} className="w-6 h-6" /> : <div className="w-6 h-6 rounded-full bg-slate-700 flex items-center justify-center text-xs text-white">{symbol ? symbol[0] : '?'}</div>;
-
-                return (
-                    <button
-                        onClick={() => setSelectedCoin(id)}
-                        className={`flex flex-col flex-1 p-4 rounded-xl border transition-all duration-300 relative overflow-hidden ${isSelected
-                            ? 'bg-slate-800 border-blue-500 shadow-lg shadow-blue-500/20'
-                            : 'bg-slate-900/50 border-slate-800 hover:bg-slate-800 hover:border-slate-700'
-                            }`}
-                    >
-                        <div className="flex items-center justify-between w-full mb-2">
-                            <div className="flex items-center gap-2">
-                                {typeof iconUrl === 'string' ? <img src={iconUrl} alt={name} className="w-6 h-6" /> : iconUrl}
-                                <span className={`font-bold ${isSelected ? 'text-white' : 'text-slate-400'}`}>{symbol}</span>
-                            </div>
-                            {isSelected && <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>}
-                        </div>
-
-                        <div className="flex flex-col items-start">
-                            <span className="text-xl font-mono text-white">
-                                {price ? `$${formatPrice(price)}` : 'Loading...'}
-                            </span>
-                            {price && (
-                                <span className={`text-xs flex items-center mt-1 ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
-                                    {isPositive ? <ArrowUp size={12} /> : <ArrowDown size={12} />}
-                                    {Math.abs(change).toFixed(2)}%
-                                </span>
-                            )}
-                        </div>
-                    </button>
-                );
-            };
 
             return (
                 <div className="space-y-6">
-                    {/* 幣種搜尋與選擇 */}
-                    <SymbolSearch
-                        symbol={selectedCoin}
-                        onSearch={setSelectedCoin}
-                        placeholder="輸入 Yahoo 代號 (e.g. SOL-USD)"
-                        transformInput={(s) => s.toUpperCase()}
-                    />
-
+                    <SymbolSearch symbol={selectedCoin} onSearch={setSelectedCoin} placeholder="輸入幣種 (e.g. solana)" transformInput={(s) => s.toLowerCase()} />
                     <div className="flex gap-4 w-full flex-wrap">
-                        <PriceCard
-                            id="BTC-USD"
-                            name="Bitcoin"
-                            symbol="BTC"
-                            iconUrl="https://cryptologos.cc/logos/bitcoin-btc-logo.png"
-                            selectedCoin={selectedCoin}
-                            setSelectedCoin={setSelectedCoin}
-                            prices={prices}
-                        />
-                        <PriceCard
-                            id="ETH-USD"
-                            name="Ethereum"
-                            symbol="ETH"
-                            iconUrl="https://cryptologos.cc/logos/ethereum-eth-logo.png"
-                            selectedCoin={selectedCoin}
-                            setSelectedCoin={setSelectedCoin}
-                            prices={prices}
-                        />
-                        {/* Custom Coin Price Card (Display only if selectedCoin is not BTC/ETH) */}
-                        {!['BTC-USD', 'ETH-USD'].includes(selectedCoin) && (
-                            <PriceCard
-                                id={selectedCoin}
-                                name={selectedCoin}
-                                symbol={selectedCoin.toUpperCase().slice(0, 4)} // Approx symbol
-                                iconUrl={<div className="w-6 h-6 rounded-full bg-slate-700 flex items-center justify-center text-xs text-white">?</div>}
-                                selectedCoin={selectedCoin}
-                                setSelectedCoin={setSelectedCoin}
-                                prices={prices}
-                            />
+                        <div onClick={() => setSelectedCoin('bitcoin')} className={`cursor-pointer flex flex-col flex-1 p-4 rounded-xl border transition-all ${selectedCoin === 'bitcoin' ? 'bg-slate-800 border-blue-500 shadow-lg' : 'bg-slate-900/50 border-slate-800'}`}>
+                            <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-2">
+                                    <img src="https://cryptologos.cc/logos/bitcoin-btc-logo.png" className="w-6 h-6" alt="BTC" />
+                                    <span className="font-bold text-white">BTC</span>
+                                </div>
+                            </div>
+                            <div className="text-xl font-mono text-white">{prices && prices['bitcoin'] ? `$${formatPrice(prices['bitcoin'].usd)}` : 'Loading...'}</div>
+                            {prices && prices['bitcoin'] && <div className={`text-xs ${prices['bitcoin'].usd_24h_change >= 0 ? 'text-green-400' : 'text-red-400'}`}>{prices['bitcoin'].usd_24h_change.toFixed(2)}%</div>}
+                        </div>
+                        <div onClick={() => setSelectedCoin('ethereum')} className={`cursor-pointer flex flex-col flex-1 p-4 rounded-xl border transition-all ${selectedCoin === 'ethereum' ? 'bg-slate-800 border-blue-500 shadow-lg' : 'bg-slate-900/50 border-slate-800'}`}>
+                            <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-2">
+                                    <img src="https://cryptologos.cc/logos/ethereum-eth-logo.png" className="w-6 h-6" alt="ETH" />
+                                    <span className="font-bold text-white">ETH</span>
+                                </div>
+                            </div>
+                            <div className="text-xl font-mono text-white">{prices && prices['ethereum'] ? `$${formatPrice(prices['ethereum'].usd)}` : 'Loading...'}</div>
+                            {prices && prices['ethereum'] && <div className={`text-xs ${prices['ethereum'].usd_24h_change >= 0 ? 'text-green-400' : 'text-red-400'}`}>{prices['ethereum'].usd_24h_change.toFixed(2)}%</div>}
+                        </div>
+                        {!['bitcoin', 'ethereum'].includes(selectedCoin) && (
+                            <div className={`cursor-pointer flex flex-col flex-1 p-4 rounded-xl border transition-all bg-slate-800 border-blue-500 shadow-lg`}>
+                                <div className="flex items-center justify-between mb-2">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-6 h-6 rounded-full bg-slate-700 flex items-center justify-center text-xs">?</div>
+                                        <span className="font-bold text-white">{selectedCoin.toUpperCase()}</span>
+                                    </div>
+                                </div>
+                                <div className="text-xl font-mono text-white">{prices && prices[selectedCoin] ? `$${formatPrice(prices[selectedCoin].usd)}` : 'Loading...'}</div>
+                                {prices && prices[selectedCoin] && <div className={`text-xs ${prices[selectedCoin].usd_24h_change >= 0 ? 'text-green-400' : 'text-red-400'}`}>{prices[selectedCoin].usd_24h_change.toFixed(2)}%</div>}
+                            </div>
                         )}
                     </div>
 
                     {loading && !historicalData.length ? (
-                        <div className="h-64 flex flex-col items-center justify-center text-slate-500 gap-4">
-                            <RefreshCw className="animate-spin" size={32} />
-                            <p>正在同步真實市場數據...</p>
-                        </div>
+                        <div className="h-64 flex flex-col items-center justify-center text-slate-500 gap-4"><RefreshCw className="animate-spin" size={32} /><p>正在同步 CoinMarketCap 數據...</p></div>
                     ) : error ? (
-                        <div className="bg-red-900/20 border border-red-500/50 text-red-200 p-6 rounded-xl flex items-center gap-4">
-                            <AlertTriangle size={24} className="shrink-0" />
-                            <div>
-                                <h3 className="font-bold text-lg">數據載入失敗</h3>
-                                <p className="text-sm opacity-90 my-2">{error}</p>
-                                <div className="text-xs opacity-70 mb-3">
-                                    這可能是因為 CoinGecko API 限制了訪問頻率 (Rate Limit)，或是瀏覽器安全性限制 (CORS)。
-                                </div>
-                                <button onClick={fetchData} className="px-4 py-2 bg-red-800 hover:bg-red-700 rounded text-sm transition-colors">
-                                    重試連線
-                                </button>
-                            </div>
-                        </div>
+                        <div className="bg-red-900/20 border border-red-500/50 text-red-200 p-6 rounded-xl flex items-center gap-4"><AlertTriangle size={24} /><div><h3 className="font-bold text-lg">載入失敗</h3><p className="text-sm opacity-90 my-2">{error}</p><button onClick={fetchData} className="px-4 py-2 bg-red-800 rounded">重試</button></div></div>
                     ) : (
-                        <React.Fragment>
-                            {/* FNG 儀表板 */}
+                        <>
                             <div className="bg-slate-900 p-6 rounded-2xl border border-slate-700 shadow-xl flex flex-col items-center">
                                 <h2 className="text-xl font-bold text-slate-200 mb-4">加密貨幣恐懼與貪婪指數</h2>
-                                <FearGreedGauge
-                                    fngValue={currentFNG?.value}
-                                    classification={suggestion.title.split(' ')[0]}
-                                />
-                                {historicalData.length > 0 && (
-                                    <div className="w-full max-w-2xl mt-4 px-4">
-                                        <SentimentScarcityBar
-                                            data={historicalData.map(d => d.fng)}
-                                            title="過去 365 天加密貨幣市場買入機會分佈"
+                                <FearGreedGauge fngValue={currentFNG?.value} classification={suggestion.title.split(' ')[0]} />
+                                {historicalData.length > 0 && <div className="w-full max-w-2xl mt-4 px-4"><SentimentScarcityBar data={historicalData.map(d => d.fng)} title="過去 365 天機會分佈" /></div>}
+                            </div>
+                            <div className={`p-6 rounded-2xl border ${suggestion.border} ${suggestion.bg} relative overflow-hidden`}>
+                                <div className="relative z-10 flex flex-col md:flex-row justify-between w-full max-w-lg mx-auto">
+                                    <div className="flex flex-col"><div className="text-sm opacity-70">DCA 策略</div><span className={`text-2xl font-bold ${suggestion.text}`}>{suggestion.title}</span><p className="mt-2 text-slate-300 text-sm max-w-lg">{suggestion.desc}</p></div>
+                                    <div className="flex flex-col items-center md:items-end gap-2 text-center md:text-right"><div className="text-sm text-slate-400">當前操作</div><div className={`text-xl font-bold ${suggestion.text} border-2 border-current px-4 py-1 rounded-lg`}>{suggestion.action}</div></div>
+                                </div>
+                                {currentFNG && prices && historicalData.length > 0 && (
+                                    <div className="mt-4 border-t border-slate-700 pt-4">
+                                        <AIAdviceBlock
+                                            assetName={`加密貨幣 (${selectedCoin.toUpperCase()})`}
+                                            priceStats={{ current: prices[selectedCoin]?.usd, high: Math.max(...historicalData.map(d => d.price)), low: Math.min(...historicalData.map(d => d.price)) }}
+                                            marketData={`資產: ${selectedCoin.toUpperCase()}\n價格: $${formatPrice(prices[selectedCoin]?.usd)}\n恐懼貪婪指數: ${currentFNG.value} (${currentFNG.value_classification})`}
                                         />
                                     </div>
                                 )}
                             </div>
-
-                            {/* 策略建議 */}
-                            <div className={`p-6 rounded-2xl border ${suggestion.border} ${suggestion.bg} relative overflow-hidden transition-all duration-500`}>
-                                <div className="relative z-10 flex flex-col md:flex-row justify-between items-center w-full max-w-lg mx-auto mt-0">
-                                    <div className="flex flex-col items-start text-left mb-4 md:mb-0">
-                                        <div className="text-sm uppercase tracking-wider opacity-70 mb-1">DCA 策略建議</div>
-                                        <span className={`text-2xl font-bold ${suggestion.text}`}>
-                                            {suggestion.title}
-                                        </span>
-                                        <p className="mt-2 text-slate-300 max-w-lg text-sm">
-                                            {suggestion.desc}
-                                        </p>
-                                    </div>
-                                    <div className="flex flex-col items-center md:items-end gap-2 min-w-[140px] text-center md:text-right">
-                                        <div className="text-sm text-slate-400">當前操作</div>
-                                        <div className={`text-xl font-bold ${suggestion.text} border-2 border-current px-4 py-1 rounded-lg whitespace-nowrap`}>
-                                            {suggestion.action}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* AI Advice Integration */}
-                            {currentFNG && prices && historicalData.length > 0 && (
-                                <div className="mb-6">
-                                    <AIAdviceBlock
-                                        assetName={`加密貨幣 (${selectedCoin.toUpperCase()})`}
-                                        priceStats={{
-                                            current: prices && prices[selectedCoin] ? prices[selectedCoin].usd : historicalData[historicalData.length - 1].price,
-                                            high: Math.max(...historicalData.map(d => d.price)),
-                                            low: Math.min(...historicalData.map(d => d.price))
-                                        }}
-                                        marketData={`
-                                            資產: ${selectedCoin.toUpperCase()}
-                                            價格: $${formatPrice(prices && prices[selectedCoin] ? prices[selectedCoin].usd : historicalData[historicalData.length - 1].price)}
-                                            恐懼貪婪指數: ${currentFNG.value} (${currentFNG.value_classification})
-                                            近一年最高價: $${formatPrice(Math.max(...historicalData.map(d => d.price)))}
-                                            近一年最低價: $${formatPrice(Math.min(...historicalData.map(d => d.price)))}
-                                        `}
-                                    />
-                                </div>
-                            )}
-
-                            {/* 價格走勢圖 */}
                             <div className="bg-slate-900 p-4 rounded-2xl border border-slate-800 shadow-xl">
                                 <div className="flex justify-between items-center mb-4">
-                                    <h2 className="text-lg font-semibold flex items-center gap-2">
-                                        <TrendingUp size={18} className="text-slate-400" />
-                                        價格走勢與買入訊號 ({selectedCoin.toUpperCase()})
-                                    </h2>
+                                    <h2 className="text-lg font-semibold flex items-center gap-2"><TrendingUp size={18} className="text-slate-400" /> 歷史走勢 ({selectedCoin.toUpperCase()})</h2>
                                     <TimeRangeSelector range={timeRange} onRangeChange={setTimeRange} />
-                                    <div className="flex items-center gap-4 text-xs">
-                                        <div className="flex items-center gap-1">
-                                            <span className="w-2 h-2 rounded-full bg-red-500"></span>
-                                            <span className="text-slate-400">極度恐懼</span>
-                                        </div>
-                                        <div className="flex items-center gap-1">
-                                            <span className="w-2 h-2 rounded-full bg-orange-500"></span>
-                                            <span className="text-slate-400">恐懼</span>
-                                        </div>
-                                    </div>
                                 </div>
-                                <div className="h-[350px] w-full relative">
+                                <div className="h-[300px] sm:h-[350px] w-full relative">
                                     {chartData && <ChartComponent data={chartData} options={chartOptions} />}
                                 </div>
-                                <p className="text-center text-xs text-slate-500 mt-4">
-                                    * 紅點/橘點標記處代表當天恐懼指數低於 40，為歷史回測建議的買入時機。
-                                </p>
                             </div>
-
-                            {/* 新聞區塊 */}
                             <div className="mt-8">
-                                <div className="flex items-center gap-2 mb-6">
-                                    <Newspaper className="text-blue-500" />
-                                    <h2 className="text-xl font-bold text-slate-200">今日幣圈頭條</h2>
-                                </div>
-
-                                {!newsLoading && !newsError && newsData.length > 0 && (
-                                    <>
-                                        <NewsAIAnalysis newsItems={newsData} />
-                                        <NewsSummary news={newsData} />
-                                    </>
-                                )}
-
+                                <div className="flex items-center gap-2 mb-6"><Newspaper className="text-blue-500" /><h2 className="text-xl font-bold text-slate-200">今日幣圈頭條</h2></div>
+                                {!newsLoading && !newsError && newsData.length > 0 && <><NewsAIAnalysis newsItems={newsData} /><NewsSummary news={newsData} /></>}
                                 <NewsSection news={newsData} loading={newsLoading} error={newsError} />
                             </div>
-
-                            <div className="grid md:grid-cols-2 gap-4">
-                                <div className="bg-slate-900 p-5 rounded-xl border border-slate-800">
-                                    <h3 className="font-bold text-slate-200 mb-3 flex items-center gap-2">
-                                        <Smartphone size={18} />
-                                        App 通知機制
-                                    </h3>
-                                    <ul className="space-y-2 text-sm text-slate-400">
-                                        <li className="flex gap-2">
-                                            <span className="text-blue-500">•</span>
-                                            <span>請點擊右上角開關開啟通知權限。</span>
-                                        </li>
-                                        <li className="flex gap-2">
-                                            <span className="text-blue-500">•</span>
-                                            <span>當指數 &lt; 25 (極度恐懼)：跳出強力買入通知。</span>
-                                        </li>
-                                        <li className="flex gap-2">
-                                            <span className="text-blue-500">•</span>
-                                            <span>當指數 26-44 (恐懼)：跳出標準 DCA 通知。 (已根據最新圖表調整)</span>
-                                        </li>
-                                        <li className="flex gap-2">
-                                            <span className="text-blue-500">•</span>
-                                            <span>每日早上 8:00 (UTC+8) 更新數據時觸發。</span>
-                                        </li>
-                                    </ul>
-                                </div>
-
-                                <div className="bg-slate-900 p-5 rounded-xl border border-slate-800">
-                                    <h3 className="font-bold text-slate-200 mb-3 flex items-center gap-2">
-                                        <Info size={18} />
-                                        關於數據來源
-                                    </h3>
-                                    <div className="text-sm text-slate-400 space-y-2">
-                                        <p>
-                                            <strong>價格數據:</strong> CoinGecko V3 API (每日收盤價 & 即時報價)
-                                        </p>
-                                        <p>
-                                            <strong>情緒指標:</strong> Alternative.me Crypto Fear & Greed Index
-                                        </p>
-                                        <p className="text-xs text-slate-500 mt-2 border-t border-slate-800 pt-2">
-                                            最後更新: {lastUpdated ? lastUpdated.toLocaleString() : '-'}
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-                        </React.Fragment>
+                            <div className="bg-slate-900 p-5 rounded-xl border border-slate-800 mt-6"><h3 className="font-bold text-slate-200 mb-3 flex items-center gap-2"><Info size={18} />關於數據來源</h3><div className="text-sm text-slate-400 space-y-2"><p><strong>價格數據:</strong> CoinMarketCap (即時), CoinGecko (歷史)</p><p><strong>情緒指標:</strong> Alternative.me Crypto Fear & Greed Index</p></div></div>
+                        </>
                     )}
                 </div>
             );
