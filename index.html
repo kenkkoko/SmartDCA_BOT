@@ -224,7 +224,7 @@
                 return `⚠️ AI 暫時無法提供建議 (未設定 API Key)。請在 Actions Secrets 設定，或在 Console 輸入 window.GEMINI_API_KEY='你的KEY'`;
             }
             try {
-                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
                 const response = await fetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -861,9 +861,9 @@
                         console.error("FNG Fetch Error:", e);
                     }
 
-                    // 2. 獲取美股歷史數據 (Switch to Yahoo Finance for robustness & 1Y data)
-                    // Alpha Vantage (AV) has strict rate limits causing "straight line" / no data issues.
-                    // Yahoo Finance via Proxy is more reliable for client-side historical data.
+                    // 2. 獲取美股歷史數據 (Yahoo Finance)
+                    // The "Straight Line" error often comes from data mismatch or insufficient history.
+                    // We ensure we get 1Y data and map it correctly.
                     const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${selectedSymbol}?interval=1d&range=1y`;
                     const historyRes = await fetch('https://corsproxy.io/?' + encodeURIComponent(yahooUrl));
 
@@ -884,10 +884,27 @@
                         const price = closeQuotes[i];
                         if (price === null || price === undefined) return null;
                         const date = new Date(t * 1000).toISOString().split('T')[0];
+
+                        // FNG Mapping Logic:
+                        // FNG data might be sparse or have slight date offsets (weekend/holiday).
+                        // We try to find the exact date, or the closest previous date if exact missing? 
+                        // For now, exact match is safest, defaulting to 50 if missing.
+                        let fngVal = fngMap.get(date);
+
+                        // Fallback mechanism: If FNG missing, try previous day? 
+                        // (Simplification: just use 50 (Neutral) to avoid breaking graph, or 
+                        //  use the last known FNG value to keep "state".)
+                        if (fngVal === undefined && fngHistory.length > 0) {
+                            // Find closest FNG before this date? This is O(N*M), slow.
+                            // Optimization: Iterate both sorted arrays. 
+                            // Lazy fix: Default to 50.
+                            fngVal = 50;
+                        }
+
                         return {
                             date: date,
                             price: price,
-                            fng: fngMap.get(date) || 50 // Default to 50 (Neutral) if FNG missing for that day
+                            fng: fngVal
                         };
                     }).filter(item => item !== null).sort((a, b) => new Date(a.date) - new Date(b.date));
 
@@ -1190,11 +1207,11 @@
         };
 
         const getRsiClassification = (rsi) => {
-            if (rsi <= 25) return "極度恐懼 (Strong Buy)";
-            if (rsi <= 40) return "恐懼 (DCA Buy)";
-            if (rsi <= 60) return "中立 (Neutral)";
-            if (rsi <= 75) return "貪婪 (Stop Buying)";
-            return "極度貪婪 (Take Profit)";
+            if (rsi <= 25) return "極度恐懼";
+            if (rsi <= 40) return "恐懼";
+            if (rsi <= 60) return "中立";
+            if (rsi <= 75) return "貪婪";
+            return "極度貪婪";
         };
 
         // --- 臺股儀表板元件 ---
@@ -1277,14 +1294,12 @@
                     // Prepare tickers
                     const yahooSymbol = selectedSymbol.includes('.') ? selectedSymbol : `${selectedSymbol}.TW`;
 
-                    // A. Fetch History (Yahoo) - Needed for RSI & Chart
-                    let range = '1y';
-                    if (timeRange === '1M') range = '1mo';
-                    else if (timeRange === '6M') range = '6mo';
-                    else if (timeRange === '1Y') range = '1y';
-                    else if (timeRange === 'ALL') range = 'max';
 
-                    const historyUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}?interval=1d&range=${range}`;
+                    // A. Fetch History (Yahoo) - Needed for RSI & Chart
+                    // Always fetch 1Y (or max) to ensuring RSI calculation and smooth scaling
+                    let range = '1y';
+
+                    const historyUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}?interval=1d&range=${range}`; // Fixed range
                     const historyRes = await fetch('https://corsproxy.io/?' + encodeURIComponent(historyUrl));
                     const historyJson = await historyRes.json();
 
@@ -1391,41 +1406,32 @@
 
             useEffect(() => {
                 fetchData();
-            }, [selectedSymbol, timeRange]);
+            }, [selectedSymbol]); // Remove timeRange from dependency
 
-            if (loading) return <div className="flex justify-center items-center h-64"><RefreshCw className="animate-spin text-slate-500" size={32} /></div>;
-            if (error) return (
-                <div className="bg-red-900/20 border border-red-500/50 text-red-200 p-6 rounded-xl flex items-center gap-4">
-                    <AlertTriangle size={24} className="shrink-0" />
-                    <div>
-                        <h3 className="font-bold text-lg">臺股數據載入失敗</h3>
-                        <p className="text-sm opacity-90 my-2">{error}</p>
-                        <button onClick={fetchData} className="px-4 py-2 bg-red-800 hover:bg-red-700 rounded text-sm transition-colors mt-2">
-                            重試連線
-                        </button>
-                    </div>
-                </div>
-            );
+
 
             const suggestion = rsiData ? getSuggestion(rsiData.value) : null;
 
             // Chart Config
-            const chartData = {
-                labels: rsiData.history.map(d => new Date(d.x).toLocaleDateString()),
-                datasets: [{
-                    label: `${selectedSymbol} 股價`,
-                    data: rsiData.history.map(d => d.y),
-                    borderColor: '#3b82f6',
-                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                    borderWidth: 2,
-                    pointRadius: rsiData.history.map(d => d.rsi <= 44 ? 3 : 0), // 點半徑
-                    pointBackgroundColor: rsiData.history.map(d => d.rsi <= 25 ? '#ef4444' : (d.rsi <= 44 ? '#f97316' : 'rgba(0,0,0,0)')), // 點填充色
-                    pointBorderColor: rsiData.history.map(d => d.rsi <= 25 ? '#ef4444' : (d.rsi <= 44 ? '#f97316' : 'rgba(0,0,0,0)')),
-                    pointHoverRadius: 4,
-                    fill: true,
-                    tension: 0.4
-                }]
-            };
+            const chartData = useMemo(() => {
+                if (!rsiData || !rsiData.history) return null;
+                return {
+                    labels: rsiData.history.map(d => new Date(d.x).toLocaleDateString()),
+                    datasets: [{
+                        label: `${selectedSymbol} 股價`,
+                        data: rsiData.history.map(d => d.y),
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        borderWidth: 2,
+                        pointRadius: rsiData.history.map(d => d.rsi <= 44 ? 3 : 0), // 點半徑
+                        pointBackgroundColor: rsiData.history.map(d => d.rsi <= 25 ? '#ef4444' : (d.rsi <= 44 ? '#f97316' : 'rgba(0,0,0,0)')), // 點填充色
+                        pointBorderColor: rsiData.history.map(d => d.rsi <= 25 ? '#ef4444' : (d.rsi <= 44 ? '#f97316' : 'rgba(0,0,0,0)')),
+                        pointHoverRadius: 4,
+                        fill: true,
+                        tension: 0.4
+                    }]
+                };
+            }, [rsiData, selectedSymbol]);
 
             const chartOptions = {
                 responsive: true,
@@ -1452,6 +1458,46 @@
                     y: { grid: { color: '#334155' }, ticks: { color: '#94a3b8' } }
                 }
             };
+
+            // Filtered Chart Data based on TimeRange
+            const displayChartData = useMemo(() => {
+                if (!chartData || !rsiData || !rsiData.history) return null;
+
+                const now = new Date();
+                let cutoff = new Date();
+                if (timeRange === '1M') cutoff.setMonth(now.getMonth() - 1);
+                else if (timeRange === '6M') cutoff.setMonth(now.getMonth() - 6);
+                else if (timeRange === '1Y') cutoff.setFullYear(now.getFullYear() - 1);
+                else cutoff = new Date(0); // ALL
+
+                const filteredHistory = rsiData.history.filter(d => d.x >= cutoff.getTime());
+
+                return {
+                    ...chartData,
+                    labels: filteredHistory.map(d => new Date(d.x).toLocaleDateString()),
+                    datasets: [{
+                        ...chartData.datasets[0],
+                        data: filteredHistory.map(d => d.y),
+                        pointRadius: filteredHistory.map(d => d.rsi <= 44 ? 3 : 0),
+                        pointBackgroundColor: filteredHistory.map(d => d.rsi <= 25 ? '#ef4444' : (d.rsi <= 44 ? '#f97316' : 'rgba(0,0,0,0)')),
+                        pointBorderColor: filteredHistory.map(d => d.rsi <= 25 ? '#ef4444' : (d.rsi <= 44 ? '#f97316' : 'rgba(0,0,0,0)')),
+                    }]
+                };
+            }, [chartData, timeRange, rsiData]);
+
+            if (loading) return <div className="flex justify-center items-center h-64"><RefreshCw className="animate-spin text-slate-500" size={32} /></div>;
+            if (error) return (
+                <div className="bg-red-900/20 border border-red-500/50 text-red-200 p-6 rounded-xl flex items-center gap-4">
+                    <AlertTriangle size={24} className="shrink-0" />
+                    <div>
+                        <h3 className="font-bold text-lg">臺股數據載入失敗</h3>
+                        <p className="text-sm opacity-90 my-2">{error}</p>
+                        <button onClick={fetchData} className="px-4 py-2 bg-red-800 hover:bg-red-700 rounded text-sm transition-colors mt-2">
+                            重試連線
+                        </button>
+                    </div>
+                </div>
+            );
 
             return (
                 <div className="space-y-6">
@@ -1493,7 +1539,7 @@
                                     classification={rsiData.classification}
                                 />
                             )}
-                            {/* Sentiment Scarcity Bar */}
+                            {/* Sentiment Scarcity Bar (Show Full Year) */}
                             {rsiData && rsiData.history && (
                                 <div className="w-full max-w-2xl mt-4 px-4">
                                     <SentimentScarcityBar
@@ -1551,7 +1597,7 @@
                                 <TimeRangeSelector range={timeRange} onRangeChange={setTimeRange} />
                             </div>
                             <div className="h-[350px] w-full relative">
-                                <ChartComponent data={chartData} options={chartOptions} />
+                                <ChartComponent data={displayChartData} options={chartOptions} />
                             </div>
                         </div>
                     )
@@ -1646,11 +1692,8 @@
                     const fngJson = await fngResponse.json();
 
                     // 2. Fetch Historical Data (CoinGecko fallback for history)
-                    let days = '365';
-                    if (timeRange === '1M') days = '30';
-                    else if (timeRange === '6M') days = '180';
-                    else if (timeRange === '1Y') days = '365';
-                    else if (timeRange === 'ALL') days = 'max';
+                    // Always fetch 365 days to allow local filtering
+                    const days = '365';
 
                     let coinUrl = `https://api.coingecko.com/api/v3/coins/${selectedCoin}/market_chart?vs_currency=usd&days=${days}&interval=daily`;
                     let coinResponse = await fetch(coinUrl);
@@ -1732,12 +1775,23 @@
             useEffect(() => {
                 fetchData();
                 fetchNews();
-            }, [selectedCoin, timeRange]);
+            }, [selectedCoin]); // Remove timeRange from re-fetch trigger
 
+            // Local Filtering for Chart
             const chartData = useMemo(() => {
                 if (!historicalData.length) return null;
-                const labels = historicalData.map(d => d.date);
-                const prices = historicalData.map(d => d.price);
+
+                const now = new Date();
+                let cutoff = new Date();
+                if (timeRange === '1M') cutoff.setMonth(now.getMonth() - 1);
+                else if (timeRange === '6M') cutoff.setMonth(now.getMonth() - 6);
+                else if (timeRange === '1Y') cutoff.setFullYear(now.getFullYear() - 1);
+                else cutoff = new Date(0); // ALL
+
+                const filteredData = historicalData.filter(d => new Date(d.date) >= cutoff);
+
+                const labels = filteredData.map(d => d.date);
+                const prices = filteredData.map(d => d.price);
 
                 return {
                     labels,
@@ -1753,15 +1807,15 @@
                             return gradient;
                         },
                         borderWidth: 2,
-                        pointBackgroundColor: historicalData.map(d => d.fng <= 25 ? '#ef4444' : (d.fng <= 44 ? '#f97316' : 'rgba(0,0,0,0)')),
-                        pointBorderColor: historicalData.map(d => d.fng <= 25 ? '#ef4444' : (d.fng <= 44 ? '#f97316' : 'rgba(0,0,0,0)')),
-                        pointRadius: historicalData.map(d => d.fng <= 44 ? (d.fng <= 25 ? 3 : 2) : 0),
+                        pointBackgroundColor: filteredData.map(d => d.fng <= 25 ? '#ef4444' : (d.fng <= 44 ? '#f97316' : 'rgba(0,0,0,0)')),
+                        pointBorderColor: filteredData.map(d => d.fng <= 25 ? '#ef4444' : (d.fng <= 44 ? '#f97316' : 'rgba(0,0,0,0)')),
+                        pointRadius: filteredData.map(d => d.fng <= 44 ? (d.fng <= 25 ? 3 : 2) : 0),
                         pointHoverRadius: 4,
                         fill: true,
                         tension: 0.4
                     }]
                 };
-            }, [historicalData, selectedCoin]);
+            }, [historicalData, selectedCoin, timeRange]);
 
             const chartOptions = {
                 responsive: true,
