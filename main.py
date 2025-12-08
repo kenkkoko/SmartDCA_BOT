@@ -204,6 +204,17 @@ def main():
         status_icon = get_status_emoji(us_stock_fng)
         status_text = get_status_text(us_stock_fng)
         msg = f"🇺🇸 美股: {us_stock_fng} ({status_text} {status_icon})"
+        
+        # Add SPY Stats
+        spy_stats = fetch_price_stats("SPY")
+        if spy_stats:
+             msg += f"\n   - SPY: ${format_price(spy_stats['current'])} (1Y High: ${format_price(spy_stats['high'])}, Low: ${format_price(spy_stats['low'])})"
+        
+        # Add Gold Stats (GLD)
+        gld_stats = fetch_price_stats("GLD")
+        if gld_stats:
+             msg += f"\n   - GOLD: ${format_price(gld_stats['current'])} (1Y High: ${format_price(gld_stats['high'])}, Low: ${format_price(gld_stats['low'])})"
+
         market_status_list.append(msg)
         if us_stock_fng <= FEAR_THRESHOLD:
             has_buy_signal = True
@@ -213,6 +224,12 @@ def main():
         status_icon = get_status_emoji(tw_stock_rsi)
         status_text = get_status_text(tw_stock_rsi, is_rsi=True)
         msg = f"🇹🇼 台股(0050): {tw_stock_rsi} ({status_text} {status_icon})"
+        
+        # Add 0050 Stats
+        tw50_stats = fetch_price_stats("0050.TW")
+        if tw50_stats:
+             msg += f"\n   - 0050: ${format_price(tw50_stats['current'])} (1Y High: ${format_price(tw50_stats['high'])}, Low: ${format_price(tw50_stats['low'])})"
+
         market_status_list.append(msg)
         if tw_stock_rsi <= FEAR_THRESHOLD:
             has_buy_signal = True
