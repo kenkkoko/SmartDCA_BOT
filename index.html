@@ -224,7 +224,7 @@
                 return `⚠️ AI 暫時無法提供建議 (未設定 API Key)。請在 Actions Secrets 設定，或在 Console 輸入 window.GEMINI_API_KEY='你的KEY'`;
             }
             try {
-                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-live:generateContent?key=${apiKey}`;
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-live:generateContent?key=${apiKey}`;
                 const response = await fetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
