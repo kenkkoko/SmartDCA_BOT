@@ -132,7 +132,7 @@ def generate_ai_advice(market_status_list):
 
     try:
         genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel('gemini-2.5-flash')
+        model = genai.GenerativeModel('gemini-2.5-flash-live')
         
         prompt = f"""
         你是一位極度穩健的 DCA (平均成本法) 投資顧問。你的核心策略是嚴格遵守「在市場情緒極度恐懼時才強力買入」的紀律。
